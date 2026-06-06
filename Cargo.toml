@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/bamboo-core",
+    "crates/bamboo-io",
     "crates/bamboo-noodles",
     "crates/bamboo-htslib",
     "crates/bamboo-py",

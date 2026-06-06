@@ -5,7 +5,7 @@ use bamboo_noodles::{scan_bam, AlignedRecord, BamReader};
 use pyo3::exceptions::PyStopIteration;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use std::path::PathBuf;
+
 
 #[pyclass(name = "AlignedSegment")]
 pub struct PyAlignedSegment {
@@ -94,7 +94,6 @@ impl PyAlignmentIterator {
 
 #[pyclass(name = "AlignmentFile")]
 pub struct PyAlignmentFile {
-    path: PathBuf,
     reader: BamReader,
 }
 
@@ -109,10 +108,7 @@ impl PyAlignmentFile {
             )));
         }
         let reader = BamReader::open(&path).map_err(errors::noodles_to_py_err)?;
-        Ok(Self {
-            path: PathBuf::from(path),
-            reader,
-        })
+        Ok(Self { reader })
     }
 
     fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
@@ -204,16 +200,13 @@ impl PyAlignmentFile {
         reference_name: Option<String>,
     ) -> PyResult<PyObject> {
         let options = build_scan_options(columns, tags, region, min_mapq, reference_name)?;
-        let table = scan_bam(
-            self.path.to_string_lossy().as_ref(),
-            options,
-        )
+        let table = scan_bam(self.reader.uri(), options)
         .map_err(errors::noodles_to_py_err)?;
         table_to_pyarrow(py, &table)
     }
 
     fn filename(&self) -> String {
-        self.path.display().to_string()
+        self.reader.uri().to_string()
     }
 }
 

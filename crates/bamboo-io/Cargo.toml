@@ -1,0 +1,16 @@
+[package]
+name = "bamboo-io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Unified local and cloud object I/O for Bamboo"
+authors.workspace = true
+
+[dependencies]
+object_store = { version = "0.11", features = ["aws", "gcp", "http"] }
+tokio = { version = "1", features = ["rt"] }
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"

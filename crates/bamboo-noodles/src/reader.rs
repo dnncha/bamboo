@@ -1,29 +1,29 @@
 use crate::error::NoodlesError;
 use crate::record::AlignedRecord;
 use bamboo_core::{BamScanOptions, FetchRegion};
+use bamboo_io::BamSource;
 use noodles::bam as bam;
 use noodles::bgzf as bgzf;
 use noodles::sam::Header;
 use noodles::sam::alignment::RecordBuf;
-use std::path::{Path, PathBuf};
+use std::io::Cursor;
 
 /// High-level BAM reader backed by noodles.
 pub struct BamReader {
-    path: PathBuf,
+    source: BamSource,
     header: Header,
-    data: Vec<u8>,
 }
 
 impl BamReader {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, NoodlesError> {
-        let path = path.as_ref().to_path_buf();
-        let data = std::fs::read(&path)?;
-        let header = read_header(&data)?;
-        Ok(Self { path, header, data })
+    /// Open a BAM from a local path or cloud URI (`s3://`, `gs://`, `https://`, `file://`).
+    pub fn open(uri: &str) -> Result<Self, NoodlesError> {
+        let source = bamboo_io::open_bam(uri).map_err(NoodlesError::from)?;
+        let header = read_header(&source.data)?;
+        Ok(Self { source, header })
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
+    pub fn uri(&self) -> &str {
+        &self.source.uri
     }
 
     pub fn header(&self) -> &Header {
@@ -47,17 +47,17 @@ impl BamReader {
     }
 
     pub fn has_index(&self) -> bool {
-        index_path(&self.path).exists()
+        bamboo_io::has_index(&self.source.uri, &self.source.index_data)
     }
 
     pub fn count_records(&self) -> Result<usize, NoodlesError> {
-        let mut reader = open_plain_reader(&self.data)?;
+        let mut reader = open_plain_reader(&self.source.data)?;
         let _ = reader.read_header().map_err(NoodlesError::from)?;
         Ok(reader.record_bufs(&self.header).count())
     }
 
     pub fn iter_records(&self, options: &BamScanOptions) -> Result<Vec<AlignedRecord>, NoodlesError> {
-        if options.region.is_some() && index_path(&self.path).exists() {
+        if options.region.is_some() && self.has_index() {
             self.fetch_records(options)
         } else {
             self.scan_records(options)
@@ -65,7 +65,7 @@ impl BamReader {
     }
 
     pub fn scan_records(&self, options: &BamScanOptions) -> Result<Vec<AlignedRecord>, NoodlesError> {
-        let mut reader = open_plain_reader(&self.data)?;
+        let mut reader = open_plain_reader(&self.source.data)?;
         let _ = reader.read_header().map_err(NoodlesError::from)?;
         let mut records = Vec::new();
 
@@ -86,14 +86,24 @@ impl BamReader {
             .as_ref()
             .ok_or_else(|| NoodlesError::Message("fetch requires a region".to_string()))?;
 
-        if !index_path(&self.path).exists() {
-            return Err(NoodlesError::MissingIndex {
-                path: index_path(&self.path).display().to_string(),
-            });
-        }
+        let index_data = self
+            .source
+            .index_data
+            .as_ref()
+            .ok_or_else(|| NoodlesError::MissingIndex {
+                path: self
+                    .source
+                    .index_uri
+                    .clone()
+                    .unwrap_or_else(|| bamboo_io::index_uri_candidates(&self.source.uri).join(", ")),
+            })?;
+
+        let mut index_reader = bam::bai::io::Reader::new(index_data.as_slice());
+        let index = index_reader.read_index().map_err(NoodlesError::from)?;
 
         let mut reader = bam::io::indexed_reader::Builder::default()
-            .build_from_path(&self.path)
+            .set_index(index)
+            .build_from_reader(Cursor::new(self.source.data.as_slice()))
             .map_err(NoodlesError::from)?;
 
         let header = reader.read_header().map_err(NoodlesError::from)?;
@@ -145,18 +155,6 @@ fn open_plain_reader(data: &[u8]) -> Result<bam::io::Reader<bgzf::Reader<&[u8]>>
     Ok(bam::io::Reader::new(data))
 }
 
-fn index_path(path: &Path) -> PathBuf {
-    let mut index_path = path.to_path_buf();
-    index_path.set_extension("bam.bai");
-    if index_path.exists() {
-        return index_path;
-    }
-
-    let mut alt = path.to_path_buf();
-    alt.set_extension("bai");
-    alt
-}
-
 #[cfg(test)]
 mod tests {
     use crate::fixtures::{tiny_bam_path, write_tiny_bam, write_tiny_bam_index};
@@ -180,7 +178,7 @@ mod tests {
             .unwrap();
         assert_eq!(records.len(), 2);
 
-        let reader = BamReader::open(&path).unwrap();
+        let reader = BamReader::open(path.to_str().unwrap()).unwrap();
         assert_eq!(reader.count_records().unwrap(), 2);
     }
 
@@ -190,7 +188,7 @@ mod tests {
         let path = tiny_bam_path(dir.path());
         write_tiny_bam(&path).unwrap();
 
-        let reader = BamReader::open(&path).unwrap();
+        let reader = BamReader::open(path.to_str().unwrap()).unwrap();
         assert_eq!(reader.count_records().unwrap(), 2);
         assert_eq!(reader.reference_names(), vec!["chr1", "chr2"]);
     }
@@ -201,7 +199,7 @@ mod tests {
         let path = tiny_bam_path(dir.path());
         write_tiny_bam(&path).unwrap();
 
-        let reader = BamReader::open(&path).unwrap();
+        let reader = BamReader::open(path.to_str().unwrap()).unwrap();
         let options = BamScanOptions {
             min_mapq: Some(30),
             columns: vec![BamColumn::QueryName, BamColumn::MappingQuality],
@@ -218,7 +216,7 @@ mod tests {
         let path = tiny_bam_path(dir.path());
         write_tiny_bam(&path).unwrap();
 
-        let reader = BamReader::open(&path).unwrap();
+        let reader = BamReader::open(path.to_str().unwrap()).unwrap();
         let options = BamScanOptions {
             region: Some(FetchRegion {
                 reference_name: "chr1".to_string(),
@@ -240,7 +238,7 @@ mod tests {
         write_tiny_bam(&path).unwrap();
         write_tiny_bam_index(&path).unwrap();
 
-        let reader = BamReader::open(&path).unwrap();
+        let reader = BamReader::open(path.to_str().unwrap()).unwrap();
         assert!(reader.has_index());
 
         let options = BamScanOptions {
@@ -255,5 +253,18 @@ mod tests {
         let records = reader.fetch_records(&options).unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].query_name.as_deref(), Some("read1"));
+    }
+
+    #[test]
+    fn opens_file_uri() {
+        let dir = tempdir().unwrap();
+        let path = tiny_bam_path(dir.path());
+        write_tiny_bam(&path).unwrap();
+        write_tiny_bam_index(&path).unwrap();
+
+        let uri = format!("file://{}", path.display());
+        let reader = BamReader::open(&uri).unwrap();
+        assert_eq!(reader.count_records().unwrap(), 2);
+        assert!(reader.has_index());
     }
 }

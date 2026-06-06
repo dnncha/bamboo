@@ -27,8 +27,9 @@ Bamboo aims to be the library you actually want to use when writing modern genom
 **MVP milestone: BAM reading works.**
 
 Implemented today:
-- Rust workspace (`bamboo-core`, `bamboo-noodles`, `bamboo-py`)
+- Rust workspace (`bamboo-core`, `bamboo-io`, `bamboo-noodles`, `bamboo-py`)
 - `bamboo.AlignmentFile` with iteration, region fetch, and indexed fetch (`.bai`)
+- Unified path I/O via `bamboo-io`: local paths, `file://`, `https://`, `s3://`, and `gs://`
 - Columnar scan to PyArrow via `read_bam_table()` and `AlignmentFile.to_arrow()`
 - Polars helper via `bamboo.to_polars()`
 - Test fixtures and examples
@@ -36,7 +37,6 @@ Implemented today:
 Still planned for full MVP:
 - BAM/CRAM writing and CRAM decoding (via `bamboo-htslib`)
 - Basic VCF/BCF support
-- Cloud object store support (S3 + GCS at minimum)
 - PyPI / Bioconda packaging
 - Comprehensive test suite against real-world data (long reads, weird tags)
 
@@ -90,12 +90,38 @@ with bm.AlignmentFile("aligned.bam") as bam:
 
 See `examples/read_bam.py` for a command-line demo.
 
+## Cloud and remote paths
+
+Bamboo reads BAMs (and sidecar `.bai` indexes when present) from local paths and cloud URIs through the same API:
+
+```python
+import bamboo as bm
+
+# Local path or file:// URI
+with bm.AlignmentFile("aligned.bam") as bam:
+    ...
+
+# S3 (uses default AWS credential chain: env vars, ~/.aws, IAM role, etc.)
+with bm.AlignmentFile("s3://my-bucket/cohort/sample.bam") as bam:
+    ...
+
+# GCS (uses Application Default Credentials / GOOGLE_APPLICATION_CREDENTIALS)
+with bm.AlignmentFile("gs://my-bucket/cohort/sample.bam") as bam:
+    ...
+
+# HTTPS (public or pre-signed URLs)
+with bm.AlignmentFile("https://example.com/public/sample.bam") as bam:
+    ...
+```
+
+Index discovery tries `sample.bam.bai` then `sample.bai` next to the BAM URI. For indexed `fetch()`, the `.bai` must be reachable at one of those locations.
+
 ## Quick Vision for the API
 
 ```python
 import bamboo as bm
 
-# Open a BAM (local today; s3:// planned)
+# Open a BAM from local disk or a cloud URI
 with bm.AlignmentFile("aligned.bam") as bam:
     for read in bam.fetch(region="chr1:1000-2000"):
         print(read.query_name, read.reference_start)

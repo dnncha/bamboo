@@ -9,6 +9,7 @@ authors.workspace = true
 
 [dependencies]
 bamboo-core = { path = "../bamboo-core" }
+bamboo-io = { path = "../bamboo-io" }
 noodles = { version = "0.90", features = ["bam", "sam", "bgzf", "core"] }
 thiserror = "2"
 

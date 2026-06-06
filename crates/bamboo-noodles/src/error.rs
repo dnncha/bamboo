@@ -1,10 +1,12 @@
 use bamboo_core::RegionParseError;
+use bamboo_io::IoError;
 use std::fmt;
 use std::io;
 
 #[derive(Debug)]
 pub enum NoodlesError {
     Io(io::Error),
+    ObjectStore(IoError),
     Region(RegionParseError),
     MissingIndex { path: String },
     MissingReference { name: String },
@@ -15,6 +17,7 @@ impl fmt::Display for NoodlesError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(f, "{err}"),
+            Self::ObjectStore(err) => write!(f, "{err}"),
             Self::Region(err) => write!(f, "{err}"),
             Self::MissingIndex { path } => {
                 write!(f, "missing BAM index for indexed fetch: {path}")
@@ -38,5 +41,11 @@ impl From<io::Error> for NoodlesError {
 impl From<RegionParseError> for NoodlesError {
     fn from(value: RegionParseError) -> Self {
         Self::Region(value)
+    }
+}
+
+impl From<IoError> for NoodlesError {
+    fn from(value: IoError) -> Self {
+        Self::ObjectStore(value)
     }
 }

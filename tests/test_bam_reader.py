@@ -55,6 +55,14 @@ def test_alignment_file_to_arrow(tiny_bam_path: Path) -> None:
     assert table.column("qname")[0].as_py() == "read1"
 
 
+def test_alignment_file_opens_file_uri(tiny_bam_with_index: Path) -> None:
+    uri = f"file://{tiny_bam_with_index}"
+    with bamboo.AlignmentFile(uri) as bam:
+        assert bam.filename() == uri
+        assert bam.count() == 2
+        assert bam.has_index()
+
+
 def test_to_polars_helper(tiny_bam_path: Path) -> None:
     pl = pytest.importorskip("polars")
     pa = pytest.importorskip("pyarrow")
