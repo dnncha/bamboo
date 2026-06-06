@@ -80,6 +80,13 @@ def test_alignment_file_opens_file_uri(tiny_bam_with_index: Path) -> None:
         assert bam.has_index()
 
 
+def test_alignment_file_fetch_bulk(tiny_bam_with_index: Path) -> None:
+    with bamboo.AlignmentFile(str(tiny_bam_with_index)) as bam:
+        reads = bam.fetch_bulk(region="chr1:100-101")
+    assert len(reads) == 1
+    assert reads[0].query_name == "read1"
+
+
 def test_read_columns_fast_path(tiny_bam_path: Path) -> None:
     pa = pytest.importorskip("pyarrow")
 

@@ -108,6 +108,29 @@ pub fn tiny_vcf_path(dir: &Path) -> PathBuf {
     dir.join("tiny.vcf")
 }
 
+/// Path helper for a bgzipped tiny VCF fixture.
+pub fn tiny_vcf_gz_path(dir: &Path) -> PathBuf {
+    dir.join("tiny.vcf.gz")
+}
+
+/// Write a bgzipped tiny VCF fixture to `path`.
+pub fn write_tiny_vcf_gz(path: &Path) -> io::Result<()> {
+    use std::io::Write as _;
+    let file = std::fs::File::create(path)?;
+    let mut writer = noodles::bgzf::Writer::new(file);
+    writer.write_all(&tiny_vcf_bytes()?)?;
+    writer.try_finish()?;
+    Ok(())
+}
+
+/// Write a tabix index for a bgzipped VCF fixture.
+pub fn write_tiny_vcf_index(vcf_gz_path: &Path) -> io::Result<()> {
+    let index = noodles::vcf::fs::index(vcf_gz_path)?;
+    let mut index_path = std::ffi::OsString::from(vcf_gz_path);
+    index_path.push(".tbi");
+    noodles::tabix::fs::write(PathBuf::from(index_path), &index)
+}
+
 const BENCH_REFERENCES: [(&str, usize); 5] = [
     ("chr1", 250_000_000),
     ("chr2", 242_193_529),

@@ -42,6 +42,21 @@ def test_phase2_packaging_metadata() -> None:
     assert "pyarrow" in text
 
 
+def test_phase2_indexed_vcf_fetch(tiny_vcf_gz_with_index: Path) -> None:
+    with bamboo.VariantFile(str(tiny_vcf_gz_with_index)) as vcf:
+        assert vcf.has_index()
+        records = vcf.fetch(region="chr1:100-200")
+    assert len(records) == 1
+
+
+@pytest.fixture(scope="session")
+def tiny_vcf_gz_with_index() -> Path:
+    path = Path(__file__).resolve().parent / "data" / "tiny.vcf.gz"
+    if not path.exists() or not Path(f"{path}.tbi").exists():
+        pytest.skip("missing tests/data/tiny.vcf.gz or .tbi")
+    return path
+
+
 def test_phase3_vcf_reader(tiny_vcf_path: Path) -> None:
     pa = pytest.importorskip("pyarrow")
 
@@ -53,7 +68,9 @@ def test_phase3_vcf_reader(tiny_vcf_path: Path) -> None:
 def test_phase3_htslib_stub_present() -> None:
     lib = Path(__file__).resolve().parents[1] / "crates" / "bamboo-htslib" / "src" / "lib.rs"
     assert lib.exists()
-    assert "phase-2-stub" in lib.read_text()
+    text = lib.read_text()
+    assert "phase-2" in text
+    assert "noodles" in text
 
 
 def test_phase4_polars_adapter(tiny_bam_path: Path) -> None:

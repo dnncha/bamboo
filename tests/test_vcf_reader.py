@@ -36,6 +36,28 @@ def test_variant_file_fetch_region(tiny_vcf_path: Path) -> None:
     assert records[0].alt == "G"
 
 
+@pytest.fixture(scope="session")
+def tiny_vcf_gz_with_index() -> Path:
+    path = Path(__file__).parent / "data" / "tiny.vcf.gz"
+    index_path = Path(f"{path}.tbi")
+    if not path.exists() or not index_path.exists():
+        pytest.skip("missing tests/data/tiny.vcf.gz or .tbi")
+    return path
+
+
+def test_variant_file_has_index(tiny_vcf_gz_with_index: Path) -> None:
+    with bamboo.VariantFile(str(tiny_vcf_gz_with_index)) as vcf:
+        assert vcf.has_index()
+
+
+def test_indexed_vcf_fetch(tiny_vcf_gz_with_index: Path) -> None:
+    with bamboo.VariantFile(str(tiny_vcf_gz_with_index)) as vcf:
+        records = vcf.fetch(region="chr1:100-200")
+    assert len(records) == 1
+    assert records[0].chrom == "chr1"
+    assert records[0].pos == 100
+
+
 def test_read_vcf_table_exports_arrow(tiny_vcf_path: Path) -> None:
     pa = pytest.importorskip("pyarrow")
 

@@ -96,6 +96,10 @@ impl PyVariantFile {
         self.reader.reference_names()
     }
 
+    fn has_index(&self) -> bool {
+        self.reader.has_index()
+    }
+
     fn filename(&self) -> String {
         self.reader.path().to_string()
     }

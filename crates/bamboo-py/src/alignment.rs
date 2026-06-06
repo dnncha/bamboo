@@ -193,6 +193,46 @@ impl PyAlignmentFile {
         Ok(PyAlignmentIterator { stream })
     }
 
+    #[pyo3(signature = (contig=None, start=None, stop=None, region=None, min_mapq=None))]
+    fn fetch_bulk(
+        &self,
+        contig: Option<String>,
+        start: Option<u32>,
+        stop: Option<u32>,
+        region: Option<String>,
+        min_mapq: Option<u8>,
+    ) -> PyResult<Vec<PyAlignedSegment>> {
+        let reader = self.reader().map_err(errors::into_py_err)?;
+
+        let fetch_region = if let Some(region) = region {
+            Some(FetchRegion::from_samtools_region(&region).map_err(errors::into_py_err)?)
+        } else if let Some(contig) = contig {
+            Some(FetchRegion {
+                reference_name: contig,
+                start,
+                end: stop,
+            })
+        } else {
+            None
+        };
+
+        let mut options = BamScanOptions::iteration_defaults();
+        options.region = fetch_region;
+        options.min_mapq = min_mapq;
+
+        let stream = reader
+            .open_stream(options)
+            .map_err(errors::noodles_to_py_err)?;
+
+        stream
+            .map(|result| {
+                result
+                    .map(|record| PyAlignedSegment { inner: record })
+                    .map_err(errors::noodles_to_py_err)
+            })
+            .collect()
+    }
+
     fn write(&mut self, record: &PyAlignedSegment) -> PyResult<()> {
         match &mut self.inner {
             AlignmentFileInner::Write(writer) => writer

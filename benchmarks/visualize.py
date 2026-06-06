@@ -25,6 +25,7 @@ TASK_LABELS = {
     "count_records": "Count records",
     "iterate_materialize": "Iterate + materialize",
     "columnar_materialize": "Columnar scan (recommended)",
+    "region_fetch_bulk": "Indexed region fetch (bulk)",
     "region_fetch": "Indexed region fetch",
     "arrow_export": "Arrow table export",
     "write_roundtrip": "Write round-trip",

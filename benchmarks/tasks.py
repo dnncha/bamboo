@@ -258,6 +258,50 @@ def task_write_roundtrip(path: Path, backend: str) -> Callable[[], int]:
     raise ValueError(f"unsupported backend '{backend}'")
 
 
+def task_region_fetch_bulk(path: Path, backend: str, region: str = REGION) -> Callable[[], int]:
+    if backend == "bamboo":
+        import bamboo as bm
+
+        def run() -> int:
+            with bm.AlignmentFile(str(path)) as bam:
+                reads = bam.fetch_bulk(region=region)
+            rows = [_materialize_fields(read) for read in reads]
+            return len(rows)
+
+        return run
+
+    if backend == "pysam":
+        import pysam
+
+        contig, interval = region.split(":", 1)
+        start_s, end_s = interval.split("-", 1)
+        start = max(int(start_s) - 1, 0)
+        end = int(end_s)
+
+        def run() -> int:
+            rows: list[tuple[str | None, str | None, int | None, int | None, str]] = []
+            with pysam.AlignmentFile(str(path), "rb") as bam:
+                for read in bam.fetch(contig, start, end):
+                    rows.append(_materialize_fields(read))
+            return len(rows)
+
+        return run
+
+    if backend == "samtools":
+        def run() -> int:
+            completed = subprocess.run(
+                ["samtools", "view", str(path), region],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return len(completed.stdout.splitlines())
+
+        return run
+
+    raise ValueError(f"unsupported backend '{backend}'")
+
+
 def task_region_columnar(path: Path, backend: str, region: str = REGION) -> Callable[[], int]:
     if backend == "bamboo":
         import bamboo as bm
@@ -371,6 +415,7 @@ TASK_SPECS: list[tuple[str, Callable[[Path, str], Callable[[], int]]]] = [
     ("iterate_materialize", task_iterate_materialize),
     ("columnar_materialize", task_columnar_materialize),
     ("region_columnar", task_region_columnar),
+    ("region_fetch_bulk", task_region_fetch_bulk),
     ("region_fetch", task_region_fetch),
     ("arrow_export", task_arrow_export),
     ("write_roundtrip", task_write_roundtrip),
