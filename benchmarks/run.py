@@ -148,8 +148,8 @@ def main() -> int:
     for task_name, task_fn in task_specs:
         print(f"== {task_name} ==")
         for backend in backends:
-            if task_name == "arrow_export" and backend == "samtools":
-                print("  - samtools: skipped (no Arrow export)")
+            if task_name in {"arrow_export", "columnar_materialize"} and backend == "samtools":
+                print(f"  - samtools: skipped (no {task_name})")
                 continue
             if task_name == "write_roundtrip" and backend == "samtools":
                 print("  - samtools: skipped (write not benchmarked)")

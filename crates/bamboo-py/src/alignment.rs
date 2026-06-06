@@ -252,6 +252,19 @@ impl PyAlignmentFile {
     }
 
     #[pyo3(signature = (*, columns=None, tags=None, region=None, min_mapq=None, reference_name=None))]
+    fn read_table(
+        &self,
+        py: Python<'_>,
+        columns: Option<Vec<String>>,
+        tags: Option<Vec<String>>,
+        region: Option<String>,
+        min_mapq: Option<u8>,
+        reference_name: Option<String>,
+    ) -> PyResult<PyObject> {
+        self.to_arrow(py, columns, tags, region, min_mapq, reference_name)
+    }
+
+    #[pyo3(signature = (*, columns=None, tags=None, region=None, min_mapq=None, reference_name=None))]
     fn to_arrow(
         &self,
         py: Python<'_>,

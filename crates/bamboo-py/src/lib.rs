@@ -18,6 +18,7 @@ fn _bamboo(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAlignmentIterator>()?;
     m.add_function(wrap_pyfunction!(read_bam_table, m)?)?;
     m.add_function(wrap_pyfunction!(scan_bam_table, m)?)?;
+    m.add_function(wrap_pyfunction!(read_columns, m)?)?;
     Ok(())
 }
 
@@ -40,6 +41,29 @@ fn read_bam_table(
 #[pyfunction]
 #[pyo3(signature = (path, *, columns=None, tags=None, region=None, min_mapq=None, reference_name=None))]
 fn scan_bam_table(
+    py: Python<'_>,
+    path: String,
+    columns: Option<Vec<String>>,
+    tags: Option<Vec<String>>,
+    region: Option<String>,
+    min_mapq: Option<u8>,
+    reference_name: Option<String>,
+) -> PyResult<PyObject> {
+    read_bam_table(
+        py,
+        path,
+        columns,
+        tags,
+        region,
+        min_mapq,
+        reference_name,
+    )
+}
+
+/// Fast columnar scan — the recommended production path for analytics workloads.
+#[pyfunction]
+#[pyo3(signature = (path, *, columns=None, tags=None, region=None, min_mapq=None, reference_name=None))]
+fn read_columns(
     py: Python<'_>,
     path: String,
     columns: Option<Vec<String>>,

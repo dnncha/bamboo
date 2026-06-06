@@ -1,3 +1,4 @@
+use crate::columnar::scan_reader_columnar;
 use crate::error::NoodlesError;
 use crate::reader::BamReader;
 use crate::record::AlignedRecord;
@@ -11,11 +12,7 @@ pub fn scan_bam(path: &str, options: BamScanOptions) -> Result<BamTable, Noodles
 
 /// Scan an open reader into a columnar `BamTable` without reopening the source.
 pub fn scan_reader(reader: &BamReader, options: BamScanOptions) -> Result<BamTable, NoodlesError> {
-    let mut table = BamTable::new(options.columns.clone(), options.tags.clone());
-    for record in reader.open_stream(options.clone())? {
-        record?.append_to_table(&mut table, &options);
-    }
-    Ok(table)
+    scan_reader_columnar(reader.source(), reader.header(), options)
 }
 
 #[allow(dead_code)]

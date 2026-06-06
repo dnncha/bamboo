@@ -37,18 +37,41 @@ pub struct BamTable {
 
 impl BamTable {
     pub fn new(columns: Vec<BamColumn>, tags: Vec<String>) -> Self {
+        Self::with_capacity(columns, tags, 0)
+    }
+
+    pub fn with_capacity(columns: Vec<BamColumn>, tags: Vec<String>, rows: usize) -> Self {
         let tag_columns = tags
-            .into_iter()
+            .iter()
             .map(|name| TagColumn {
-                name,
-                values: Vec::new(),
+                name: name.clone(),
+                values: Vec::with_capacity(rows),
             })
             .collect();
 
-        Self {
+        let mut table = Self {
             columns,
             tags: tag_columns,
             ..Default::default()
+        };
+        table.reserve(rows);
+        table
+    }
+
+    pub fn reserve(&mut self, additional: usize) {
+        self.qname.reserve(additional);
+        self.flag.reserve(additional);
+        self.rname.reserve(additional);
+        self.pos.reserve(additional);
+        self.mapq.reserve(additional);
+        self.cigar.reserve(additional);
+        self.rnext.reserve(additional);
+        self.pnext.reserve(additional);
+        self.tlen.reserve(additional);
+        self.seq.reserve(additional);
+        self.qual.reserve(additional);
+        for tag in &mut self.tags {
+            tag.values.reserve(additional);
         }
     }
 

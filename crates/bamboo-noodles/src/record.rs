@@ -402,7 +402,7 @@ impl FieldNeeds {
     }
 }
 
-fn bam_sequence_to_optional_string(sequence: bam::record::Sequence<'_>) -> Option<String> {
+pub(crate) fn bam_sequence_to_optional_string(sequence: bam::record::Sequence<'_>) -> Option<String> {
     if sequence.is_empty() {
         None
     } else {
@@ -410,7 +410,7 @@ fn bam_sequence_to_optional_string(sequence: bam::record::Sequence<'_>) -> Optio
     }
 }
 
-fn bam_quality_to_optional_string(qualities: bam::record::QualityScores<'_>) -> Option<String> {
+pub(crate) fn bam_quality_to_optional_string(qualities: bam::record::QualityScores<'_>) -> Option<String> {
     if qualities.is_empty() {
         None
     } else {
@@ -418,7 +418,7 @@ fn bam_quality_to_optional_string(qualities: bam::record::QualityScores<'_>) -> 
     }
 }
 
-fn bam_cigar_to_string(cigar: bam::record::Cigar<'_>) -> String {
+pub(crate) fn bam_cigar_to_string(cigar: bam::record::Cigar<'_>) -> String {
     cigar
         .iter()
         .filter_map(Result::ok)

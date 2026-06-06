@@ -258,9 +258,61 @@ def task_write_roundtrip(path: Path, backend: str) -> Callable[[], int]:
     raise ValueError(f"unsupported backend '{backend}'")
 
 
+def task_columnar_materialize(path: Path, backend: str) -> Callable[[], int]:
+    if backend == "bamboo":
+        import bamboo as bm
+
+        def run() -> int:
+            table = bm.read_columns(
+                str(path),
+                columns=["qname", "rname", "pos", "mapq", "cigar"],
+            )
+            return table.num_rows
+
+        return run
+
+    if backend == "pysam":
+        import pysam
+
+        def run() -> int:
+            qname: list[str | None] = []
+            rname: list[str | None] = []
+            pos: list[int | None] = []
+            mapq: list[int | None] = []
+            cigar: list[str] = []
+            with pysam.AlignmentFile(str(path), "rb") as bam:
+                for read in bam:
+                    qname.append(read.query_name)
+                    rname.append(read.reference_name)
+                    pos.append(read.reference_start)
+                    mapq.append(read.mapping_quality)
+                    cigar.append(read.cigarstring)
+            table = pa.table(
+                {
+                    "qname": qname,
+                    "rname": rname,
+                    "pos": pos,
+                    "mapq": mapq,
+                    "cigar": cigar,
+                }
+            )
+            return table.num_rows
+
+        return run
+
+    if backend == "samtools":
+        def run() -> int:
+            raise RuntimeError("samtools has no native columnar export")
+
+        return run
+
+    raise ValueError(f"unsupported backend '{backend}'")
+
+
 TASK_SPECS: list[tuple[str, Callable[[Path, str], Callable[[], int]]]] = [
     ("count_records", task_count_records),
     ("iterate_materialize", task_iterate_materialize),
+    ("columnar_materialize", task_columnar_materialize),
     ("region_fetch", task_region_fetch),
     ("arrow_export", task_arrow_export),
     ("write_roundtrip", task_write_roundtrip),

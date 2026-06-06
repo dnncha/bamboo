@@ -80,6 +80,25 @@ def test_alignment_file_opens_file_uri(tiny_bam_with_index: Path) -> None:
         assert bam.has_index()
 
 
+def test_read_columns_fast_path(tiny_bam_path: Path) -> None:
+    pa = pytest.importorskip("pyarrow")
+
+    table = bamboo.read_columns(
+        str(tiny_bam_path),
+        columns=["qname", "rname", "pos", "mapq", "cigar"],
+    )
+    assert isinstance(table, pa.Table)
+    assert table.num_rows == 2
+    assert table.column("qname")[0].as_py() == "read1"
+
+
+def test_pysam_compat_imports(tiny_bam_path: Path) -> None:
+    from bamboo.compat import pysam as pysam_shim
+
+    assert pysam_shim.AlignmentFile is bamboo.AlignmentFile
+    assert pysam_shim.alignment_count(str(tiny_bam_path)) == 2
+
+
 def test_to_polars_helper(tiny_bam_path: Path) -> None:
     pl = pytest.importorskip("polars")
     pa = pytest.importorskip("pyarrow")

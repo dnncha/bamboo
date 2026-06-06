@@ -1,6 +1,7 @@
 //! Noodles-backed BAM reader and scanner.
 
 pub mod fixtures;
+mod columnar;
 mod error;
 mod header_util;
 mod reader;
