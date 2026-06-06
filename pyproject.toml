@@ -1,0 +1,52 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "bamboo"
+version = "0.1.0"
+description = "High-performance, modern Python library for HTS data (BAM, CRAM, VCF, etc.)"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Bamboo Contributors"},
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pyarrow>=16.0",
+]
+
+[project.optional-dependencies]
+polars = ["polars>=1.0"]
+pandas = ["pandas>=2.0", "pyarrow"]
+dev = [
+    "maturin",
+    "pytest",
+    "pytest-benchmark",
+    "ruff",
+    "mypy",
+]
+
+[project.urls]
+Homepage = "https://github.com/donncha/bamboo"
+Repository = "https://github.com/donncha/bamboo"
+Issues = "https://github.com/donncha/bamboo/issues"
+
+[tool.maturin]
+python-source = "python"
+module-name = "bamboo._bamboo"
+features = ["pyo3/extension-module"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
