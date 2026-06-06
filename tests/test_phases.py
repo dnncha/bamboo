@@ -65,17 +65,19 @@ def test_phase3_vcf_reader(tiny_vcf_path: Path) -> None:
     assert table.num_rows == 2
 
 
-def test_phase2_cram_reader(tiny_cram_path: Path) -> None:
-    with bamboo.CramFile(str(tiny_cram_path)) as cram:
+def test_phase2_cram_reader(tiny_cram_with_index: Path) -> None:
+    with bamboo.CramFile(str(tiny_cram_with_index)) as cram:
         assert cram.count() == 2
+        assert cram.has_index()
         assert sum(1 for _ in cram) == 2
+        assert len(list(cram.fetch(region="chr1:100-101"))) == 1
 
 
 @pytest.fixture(scope="session")
-def tiny_cram_path() -> Path:
+def tiny_cram_with_index() -> Path:
     path = Path(__file__).resolve().parent / "data" / "tiny.cram"
-    if not path.exists():
-        pytest.skip("missing tests/data/tiny.cram")
+    if not path.exists() or not Path(f"{path}.crai").exists():
+        pytest.skip("missing tests/data/tiny.cram or .crai")
     return path
 
 

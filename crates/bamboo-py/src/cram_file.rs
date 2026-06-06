@@ -13,8 +13,13 @@ pub struct PyCramFile {
 #[pymethods]
 impl PyCramFile {
     #[new]
-    fn new(path: String) -> PyResult<Self> {
-        let reader = CramReader::open(&path).map_err(errors::noodles_to_py_err)?;
+    #[pyo3(signature = (path, *, reference_filename=None))]
+    fn new(path: String, reference_filename: Option<String>) -> PyResult<Self> {
+        let reader = CramReader::open_with_reference(
+            &path,
+            reference_filename.as_deref(),
+        )
+        .map_err(errors::noodles_to_py_err)?;
         Ok(Self { reader })
     }
 
@@ -76,6 +81,10 @@ impl PyCramFile {
         self.reader
             .count_records()
             .map_err(errors::noodles_to_py_err)
+    }
+
+    fn has_index(&self) -> bool {
+        self.reader.has_index()
     }
 
     fn references(&self) -> Vec<String> {

@@ -16,7 +16,7 @@ use noodles::sam::alignment::record_buf::Sequence;
 use noodles::sam::alignment::record_buf::data::field::Value;
 
 /// A single parsed alignment record exposed to Python.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AlignedRecord {
     pub query_name: Option<String>,
     pub flag: u16,

@@ -118,6 +118,18 @@ pub fn tiny_cram_path(dir: &Path) -> PathBuf {
     dir.join("tiny.cram")
 }
 
+/// Path helper for the CRAI sidecar of `tiny.cram`.
+pub fn tiny_cram_index_path(dir: &Path) -> PathBuf {
+    let mut path = tiny_cram_path(dir).into_os_string();
+    path.push(".crai");
+    PathBuf::from(path)
+}
+
+/// Path helper for a tiny FASTA reference fixture.
+pub fn tiny_fasta_path(dir: &Path) -> PathBuf {
+    dir.join("tiny.fasta")
+}
+
 /// Write a tiny CRAM fixture with two mapped reads.
 pub fn write_tiny_cram(path: &Path) -> io::Result<()> {
     use noodles::cram as cram;
@@ -185,6 +197,44 @@ pub fn write_tiny_cram(path: &Path) -> io::Result<()> {
     writer.write_alignment_record(&header, &record2)?;
 
     writer.try_finish(&header)?;
+    Ok(())
+}
+
+/// Write a CRAI index for a tiny CRAM fixture.
+pub fn write_tiny_cram_index(cram_path: &Path) -> io::Result<()> {
+    use noodles::cram::{self as cram, crai};
+
+    let index = cram::fs::index(cram_path)?;
+    let mut index_path = cram_path.as_os_str().to_os_string();
+    index_path.push(".crai");
+
+    let file = std::fs::File::create(PathBuf::from(index_path))?;
+    let mut writer = crai::io::Writer::new(file);
+    writer.write_index(&index)?;
+    writer.finish()?;
+    Ok(())
+}
+
+/// Write a tiny FASTA reference fixture matching the CRAM/BAM headers.
+pub fn write_tiny_fasta(path: &Path) -> io::Result<()> {
+    use noodles::fasta as fasta;
+    use noodles::fasta::record::{Definition, Sequence};
+
+    let records = [
+        fasta::Record::new(
+            Definition::new("chr1", None),
+            Sequence::from(vec![b'N'; 1000]),
+        ),
+        fasta::Record::new(
+            Definition::new("chr2", None),
+            Sequence::from(vec![b'N'; 1000]),
+        ),
+    ];
+
+    let mut writer = fasta::io::writer::Builder::default().build_from_path(path)?;
+    for record in records {
+        writer.write_record(&record)?;
+    }
     Ok(())
 }
 
