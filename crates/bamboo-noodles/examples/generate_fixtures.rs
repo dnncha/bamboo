@@ -1,7 +1,8 @@
 //! Generate committed test fixtures under `tests/data/`.
 
 use bamboo_noodles::fixtures::{
-    write_tiny_bam, write_tiny_bam_index, write_tiny_vcf, write_tiny_vcf_gz, write_tiny_vcf_index,
+    write_tiny_bam, write_tiny_bam_index, write_tiny_cram, write_tiny_vcf, write_tiny_vcf_gz,
+    write_tiny_vcf_index,
 };
 use std::env;
 use std::path::PathBuf;
@@ -25,13 +26,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     write_tiny_vcf_gz(&vcf_gz_path)?;
     write_tiny_vcf_index(&vcf_gz_path)?;
 
+    let cram_path = root.join("tiny.cram");
+    write_tiny_cram(&cram_path)?;
+
     println!(
-        "Wrote {}, {}, {}, {}, and {}",
+        "Wrote {}, {}, {}, {}, {}, and {}",
         bam_path.display(),
         bam_path.with_extension("bam.bai").display(),
         vcf_path.display(),
         vcf_gz_path.display(),
-        format!("{}.tbi", vcf_gz_path.display())
+        format!("{}.tbi", vcf_gz_path.display()),
+        cram_path.display()
     );
     Ok(())
 }

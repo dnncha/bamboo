@@ -65,6 +65,19 @@ def test_phase3_vcf_reader(tiny_vcf_path: Path) -> None:
     assert table.num_rows == 2
 
 
+def test_phase2_cram_reader(tiny_cram_path: Path) -> None:
+    with bamboo.CramFile(str(tiny_cram_path)) as cram:
+        assert cram.count() == 2
+
+
+@pytest.fixture(scope="session")
+def tiny_cram_path() -> Path:
+    path = Path(__file__).resolve().parent / "data" / "tiny.cram"
+    if not path.exists():
+        pytest.skip("missing tests/data/tiny.cram")
+    return path
+
+
 def test_phase3_htslib_stub_present() -> None:
     lib = Path(__file__).resolve().parents[1] / "crates" / "bamboo-htslib" / "src" / "lib.rs"
     assert lib.exists()

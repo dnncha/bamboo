@@ -14,6 +14,7 @@ try:
         AlignedSegment,
         AlignmentFile,
         AlignmentIterator,
+        CramFile,
         VariantFile,
         VariantRecord,
         __version__ as _rust_version,
@@ -28,6 +29,7 @@ except ImportError:
     AlignedSegment = None  # type: ignore[assignment,misc]
     AlignmentFile = None  # type: ignore[assignment,misc]
     AlignmentIterator = None  # type: ignore[assignment,misc]
+    CramFile = None  # type: ignore[assignment,misc]
     VariantFile = None  # type: ignore[assignment,misc]
     VariantRecord = None  # type: ignore[assignment,misc]
     read_bam_table = None  # type: ignore[assignment,misc]
@@ -46,6 +48,7 @@ __all__ = [
     "AlignedSegment",
     "AlignmentFile",
     "AlignmentIterator",
+    "CramFile",
     "VariantFile",
     "VariantRecord",
     "compat",

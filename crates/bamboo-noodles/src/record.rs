@@ -329,6 +329,80 @@ impl AlignedRecord {
         Ok(builder.build())
     }
 
+    /// Reconstruct a record from a columnar table row (used by fetch iterators).
+    pub fn from_table_row(table: &BamTable, row: usize) -> Self {
+        let has = |column: BamColumn| table.columns.iter().any(|c| *c == column);
+
+        Self {
+            query_name: if has(BamColumn::QueryName) {
+                table.qname.get(row).cloned().flatten()
+            } else {
+                None
+            },
+            flag: if has(BamColumn::Flag) {
+                table.flag.get(row).copied().unwrap_or(0)
+            } else {
+                0
+            },
+            reference_name: if has(BamColumn::ReferenceName) {
+                table.rname.get(row).cloned().flatten()
+            } else {
+                None
+            },
+            reference_start: if has(BamColumn::Position) {
+                table
+                    .pos
+                    .get(row)
+                    .cloned()
+                    .flatten()
+                    .map(|value| value as i64)
+            } else {
+                None
+            },
+            mapping_quality: if has(BamColumn::MappingQuality) {
+                table.mapq.get(row).copied().flatten()
+            } else {
+                None
+            },
+            cigar: if has(BamColumn::Cigar) {
+                table.cigar.get(row).cloned().unwrap_or_default()
+            } else {
+                String::new()
+            },
+            mate_reference_name: if has(BamColumn::MateReferenceName) {
+                table.rnext.get(row).cloned().flatten()
+            } else {
+                None
+            },
+            mate_reference_start: if has(BamColumn::MatePosition) {
+                table
+                    .pnext
+                    .get(row)
+                    .cloned()
+                    .flatten()
+                    .map(|value| value as i64)
+            } else {
+                None
+            },
+            template_length: if has(BamColumn::TemplateLength) {
+                table.tlen.get(row).copied().flatten()
+            } else {
+                None
+            },
+            query_sequence: if has(BamColumn::Sequence) {
+                table.seq.get(row).cloned().flatten()
+            } else {
+                None
+            },
+            query_qualities: if has(BamColumn::Quality) {
+                table.qual.get(row).cloned().flatten()
+            } else {
+                None
+            },
+            tags: Vec::new(),
+        }
+    }
+
     pub fn append_to_table(&self, table: &mut BamTable, options: &BamScanOptions) {
         for column in &options.columns {
             match column {

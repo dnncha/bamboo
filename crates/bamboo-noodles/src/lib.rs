@@ -2,6 +2,7 @@
 
 pub mod fixtures;
 mod columnar;
+mod cram;
 mod lazy_fetch;
 mod error;
 mod header_util;
@@ -12,6 +13,7 @@ mod stream;
 mod vcf;
 mod writer;
 
+pub use cram::CramReader;
 pub use error::NoodlesError;
 pub use header_util::header_from_references;
 pub use reader::BamReader;

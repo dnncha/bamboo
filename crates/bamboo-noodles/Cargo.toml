@@ -10,7 +10,7 @@ authors.workspace = true
 [dependencies]
 bamboo-core = { path = "../bamboo-core" }
 bamboo-io = { path = "../bamboo-io" }
-noodles = { version = "0.90", features = ["bam", "sam", "bgzf", "core", "csi", "vcf", "tabix"] }
+noodles = { version = "0.90", features = ["bam", "sam", "bgzf", "core", "csi", "vcf", "tabix", "cram", "fasta"] }
 thiserror = "2"
 
 [[example]]

@@ -9,6 +9,7 @@ def test_public_api_exports() -> None:
     import bamboo as bm
 
     assert bm.AlignmentFile is not None
+    assert bm.CramFile is not None
     assert bm.VariantFile is not None
     assert bm.read_vcf_table is not None
 

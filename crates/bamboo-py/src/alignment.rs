@@ -1,6 +1,7 @@
 use crate::errors;
 use crate::{build_scan_options, table::table_to_pyarrow};
 use bamboo_core::{BamScanOptions, FetchRegion};
+use bamboo_core::BamTable;
 use bamboo_noodles::{scan_reader, AlignedRecord, BamReader, BamRecordStream, BamWriter};
 use pyo3::exceptions::{PyStopIteration, PyValueError};
 use pyo3::prelude::*;
@@ -74,9 +75,28 @@ impl PyAlignedSegment {
     }
 }
 
+enum AlignmentIterInner {
+    Stream(BamRecordStream),
+    Table { table: BamTable, index: usize },
+}
+
 #[pyclass(name = "AlignmentIterator")]
 pub struct PyAlignmentIterator {
-    stream: BamRecordStream,
+    inner: AlignmentIterInner,
+}
+
+impl PyAlignmentIterator {
+    fn from_stream(stream: BamRecordStream) -> Self {
+        Self {
+            inner: AlignmentIterInner::Stream(stream),
+        }
+    }
+
+    fn from_table(table: BamTable) -> Self {
+        Self {
+            inner: AlignmentIterInner::Table { table, index: 0 },
+        }
+    }
 }
 
 #[pymethods]
@@ -86,10 +106,20 @@ impl PyAlignmentIterator {
     }
 
     fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<PyAlignedSegment>> {
-        match slf.stream.next() {
-            Some(Ok(record)) => Ok(Some(PyAlignedSegment { inner: record })),
-            Some(Err(err)) => Err(errors::noodles_to_py_err(err)),
-            None => Err(PyStopIteration::new_err(())),
+        match &mut slf.inner {
+            AlignmentIterInner::Stream(stream) => match stream.next() {
+                Some(Ok(record)) => Ok(Some(PyAlignedSegment { inner: record })),
+                Some(Err(err)) => Err(errors::noodles_to_py_err(err)),
+                None => Err(PyStopIteration::new_err(())),
+            },
+            AlignmentIterInner::Table { table, index } => {
+                if *index >= table.len() {
+                    return Err(PyStopIteration::new_err(()));
+                }
+                let record = AlignedRecord::from_table_row(table, *index);
+                *index += 1;
+                Ok(Some(PyAlignedSegment { inner: record }))
+            }
         }
     }
 }
@@ -157,7 +187,12 @@ impl PyAlignmentFile {
     }
 
     fn __iter__(slf: PyRef<'_, Self>) -> PyResult<PyAlignmentIterator> {
-        slf.fetch(None, None, None, None, None)
+        let reader = slf.reader()?;
+        let options = BamScanOptions::iteration_defaults();
+        let stream = reader
+            .open_stream(options)
+            .map_err(errors::noodles_to_py_err)?;
+        Ok(PyAlignmentIterator::from_stream(stream))
     }
 
     #[pyo3(signature = (contig=None, start=None, stop=None, region=None, min_mapq=None))]
@@ -183,14 +218,7 @@ impl PyAlignmentFile {
             None
         };
 
-        let mut options = BamScanOptions::iteration_defaults();
-        options.region = fetch_region;
-        options.min_mapq = min_mapq;
-
-        let stream = reader
-            .open_stream(options)
-            .map_err(errors::noodles_to_py_err)?;
-        Ok(PyAlignmentIterator { stream })
+        Ok(fetch_alignment_iter(reader, fetch_region, min_mapq)?)
     }
 
     #[pyo3(signature = (contig=None, start=None, stop=None, region=None, min_mapq=None))]
@@ -216,21 +244,40 @@ impl PyAlignmentFile {
             None
         };
 
+        if fetch_region.is_some() {
+            let table = fetch_columnar_table(reader, fetch_region, min_mapq)?;
+            return Ok((0..table.len())
+                .map(|row| PyAlignedSegment {
+                    inner: AlignedRecord::from_table_row(&table, row),
+                })
+                .collect());
+        }
+
         let mut options = BamScanOptions::iteration_defaults();
-        options.region = fetch_region;
         options.min_mapq = min_mapq;
 
-        let stream = reader
+        reader
             .open_stream(options)
-            .map_err(errors::noodles_to_py_err)?;
-
-        stream
+            .map_err(errors::noodles_to_py_err)?
             .map(|result| {
                 result
                     .map(|record| PyAlignedSegment { inner: record })
                     .map_err(errors::noodles_to_py_err)
             })
             .collect()
+    }
+
+    #[pyo3(signature = (*, columns=None, tags=None, region=None, min_mapq=None, reference_name=None))]
+    fn fetch_arrow(
+        &self,
+        py: Python<'_>,
+        columns: Option<Vec<String>>,
+        tags: Option<Vec<String>>,
+        region: Option<String>,
+        min_mapq: Option<u8>,
+        reference_name: Option<String>,
+    ) -> PyResult<PyObject> {
+        self.to_arrow(py, columns, tags, region, min_mapq, reference_name)
     }
 
     fn write(&mut self, record: &PyAlignedSegment) -> PyResult<()> {
@@ -383,6 +430,35 @@ fn open_write_handle(
     }
 
     BamWriter::create_with_references(path, &refs).map_err(errors::noodles_to_py_err)
+}
+
+fn fetch_alignment_iter(
+    reader: &BamReader,
+    fetch_region: Option<FetchRegion>,
+    min_mapq: Option<u8>,
+) -> PyResult<PyAlignmentIterator> {
+    if fetch_region.is_some() {
+        let table = fetch_columnar_table(reader, fetch_region, min_mapq)?;
+        return Ok(PyAlignmentIterator::from_table(table));
+    }
+
+    let mut options = BamScanOptions::iteration_defaults();
+    options.min_mapq = min_mapq;
+    let stream = reader
+        .open_stream(options)
+        .map_err(errors::noodles_to_py_err)?;
+    Ok(PyAlignmentIterator::from_stream(stream))
+}
+
+fn fetch_columnar_table(
+    reader: &BamReader,
+    fetch_region: Option<FetchRegion>,
+    min_mapq: Option<u8>,
+) -> PyResult<BamTable> {
+    let mut options = BamScanOptions::iteration_defaults();
+    options.region = fetch_region;
+    options.min_mapq = min_mapq;
+    scan_reader(reader, options).map_err(errors::noodles_to_py_err)
 }
 
 fn tag_value_to_py(py: Python<'_>, value: &bamboo_core::TagValue) -> PyResult<PyObject> {

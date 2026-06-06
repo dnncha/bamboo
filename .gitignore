@@ -64,6 +64,7 @@ htmlcov/
 !tests/data/*.vcf.gz.tbi
 *.cram
 *.crai
+!tests/data/*.cram
 *.vcf.gz
 *.vcf.gz.tbi
 *.bcf

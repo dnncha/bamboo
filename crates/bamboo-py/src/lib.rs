@@ -1,10 +1,12 @@
 mod alignment;
+mod cram_file;
 mod errors;
 mod table;
 mod variant;
 mod vcf_table;
 
 use alignment::{PyAlignedSegment, PyAlignmentFile, PyAlignmentIterator};
+use cram_file::PyCramFile;
 use variant::{PyVariantFile, PyVariantRecord};
 use bamboo_core::{BamColumn, BamScanOptions, FetchRegion};
 use bamboo_noodles::scan_bam;
@@ -16,6 +18,7 @@ use table::table_to_pyarrow;
 #[pymodule]
 fn _bamboo(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add_class::<PyCramFile>()?;
     m.add_class::<PyAlignmentFile>()?;
     m.add_class::<PyAlignedSegment>()?;
     m.add_class::<PyAlignmentIterator>()?;

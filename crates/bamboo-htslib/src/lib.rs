@@ -4,7 +4,7 @@
 //! BAM/VCF read paths are implemented via `bamboo-noodles` (noodles).
 
 /// Placeholder marker for future htslib integration.
-pub const PHASE: &str = "phase-2-noodles-primary";
+pub const PHASE: &str = "phase-2-cram-via-noodles";
 
 /// Returns whether htslib-backed features are compiled in.
 pub fn is_available() -> bool {

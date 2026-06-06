@@ -113,6 +113,81 @@ pub fn tiny_vcf_gz_path(dir: &Path) -> PathBuf {
     dir.join("tiny.vcf.gz")
 }
 
+/// Path helper for a tiny CRAM fixture.
+pub fn tiny_cram_path(dir: &Path) -> PathBuf {
+    dir.join("tiny.cram")
+}
+
+/// Write a tiny CRAM fixture with two mapped reads.
+pub fn write_tiny_cram(path: &Path) -> io::Result<()> {
+    use noodles::cram as cram;
+    use noodles::fasta as fasta;
+    use noodles::fasta::record::{Definition, Sequence as FastaSequence};
+    use noodles::sam::alignment::io::Write as _;
+
+    let reference_sequences = vec![
+        fasta::Record::new(
+            Definition::new("chr1", None),
+            FastaSequence::from(vec![b'N'; 1000]),
+        ),
+        fasta::Record::new(
+            Definition::new("chr2", None),
+            FastaSequence::from(vec![b'N'; 1000]),
+        ),
+    ];
+
+    let mut header_builder = Header::builder().set_header(
+        Map::<HeaderMap>::builder()
+            .insert(SORT_ORDER, COORDINATE)
+            .build()
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err.to_string()))?,
+    );
+
+    for record in &reference_sequences {
+        let length = NonZeroUsize::new(record.sequence().len()).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "invalid reference length")
+        })?;
+        header_builder = header_builder.add_reference_sequence(
+            record.name(),
+            Map::<ReferenceSequence>::new(length),
+        );
+    }
+
+    let header = header_builder.build();
+    let repository = fasta::Repository::new(reference_sequences);
+    let mut writer = cram::io::writer::Builder::default()
+        .set_reference_sequence_repository(repository)
+        .build_from_path(path)?;
+    writer.write_header(&header)?;
+
+    let record = RecordBuf::builder()
+        .set_name("read1")
+        .set_flags(Flags::empty())
+        .set_reference_sequence_id(0)
+        .set_alignment_start(noodles::core::Position::try_from(100).unwrap())
+        .set_mapping_quality(MappingQuality::try_from(60).unwrap())
+        .set_cigar([Op::new(Kind::Match, 6)].into_iter().collect::<Cigar>())
+        .set_sequence(Sequence::from(b"ACGTAC".to_vec()))
+        .set_quality_scores(QualityScores::from(Vec::from(b"!!!!!!".as_slice())))
+        .build();
+    writer.write_alignment_record(&header, &record)?;
+
+    let record2 = RecordBuf::builder()
+        .set_name("read2")
+        .set_flags(Flags::empty())
+        .set_reference_sequence_id(1)
+        .set_alignment_start(noodles::core::Position::try_from(250).unwrap())
+        .set_mapping_quality(MappingQuality::try_from(5).unwrap())
+        .set_cigar([Op::new(Kind::Match, 4)].into_iter().collect::<Cigar>())
+        .set_sequence(Sequence::from(b"TTTT".to_vec()))
+        .set_quality_scores(QualityScores::from(Vec::from(b"!!!!".as_slice())))
+        .build();
+    writer.write_alignment_record(&header, &record2)?;
+
+    writer.try_finish(&header)?;
+    Ok(())
+}
+
 /// Write a bgzipped tiny VCF fixture to `path`.
 pub fn write_tiny_vcf_gz(path: &Path) -> io::Result<()> {
     use std::io::Write as _;
