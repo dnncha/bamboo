@@ -68,6 +68,7 @@ def test_phase3_vcf_reader(tiny_vcf_path: Path) -> None:
 def test_phase2_cram_reader(tiny_cram_path: Path) -> None:
     with bamboo.CramFile(str(tiny_cram_path)) as cram:
         assert cram.count() == 2
+        assert sum(1 for _ in cram) == 2
 
 
 @pytest.fixture(scope="session")

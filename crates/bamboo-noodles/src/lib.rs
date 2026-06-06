@@ -13,7 +13,7 @@ mod stream;
 mod vcf;
 mod writer;
 
-pub use cram::CramReader;
+pub use cram::{CramReader, CramRecordStream};
 pub use error::NoodlesError;
 pub use header_util::header_from_references;
 pub use reader::BamReader;

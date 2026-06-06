@@ -302,6 +302,62 @@ def task_region_fetch_bulk(path: Path, backend: str, region: str = REGION) -> Ca
     raise ValueError(f"unsupported backend '{backend}'")
 
 
+def task_region_fetch_arrow(path: Path, backend: str, region: str = REGION) -> Callable[[], int]:
+    if backend == "bamboo":
+        import bamboo as bm
+
+        def run() -> int:
+            with bm.AlignmentFile(str(path)) as bam:
+                table = bam.fetch_arrow(columns=ARROW_COLUMNS, region=region)
+            if not isinstance(table, pa.Table):
+                raise TypeError("expected pyarrow.Table from bamboo.fetch_arrow")
+            return table.num_rows
+
+        return run
+
+    if backend == "pysam":
+        import pysam
+
+        contig, interval = region.split(":", 1)
+        start_s, end_s = interval.split("-", 1)
+        start = max(int(start_s) - 1, 0)
+        end = int(end_s)
+
+        def run() -> int:
+            qname: list[str | None] = []
+            rname: list[str | None] = []
+            pos: list[int | None] = []
+            mapq: list[int | None] = []
+            cigar: list[str] = []
+            with pysam.AlignmentFile(str(path), "rb") as bam:
+                for read in bam.fetch(contig, start, end):
+                    qname.append(read.query_name)
+                    rname.append(read.reference_name)
+                    pos.append(read.reference_start)
+                    mapq.append(read.mapping_quality)
+                    cigar.append(read.cigarstring)
+            table = pa.table(
+                {
+                    "qname": qname,
+                    "rname": rname,
+                    "pos": pos,
+                    "mapq": mapq,
+                    "cigar": cigar,
+                }
+            )
+            return table.num_rows
+
+        return run
+
+    if backend == "samtools":
+        def run() -> int:
+            raise RuntimeError("samtools has no native region Arrow export")
+
+        return run
+
+    raise ValueError(f"unsupported backend '{backend}'")
+
+
 def task_region_columnar(path: Path, backend: str, region: str = REGION) -> Callable[[], int]:
     if backend == "bamboo":
         import bamboo as bm
@@ -415,6 +471,7 @@ TASK_SPECS: list[tuple[str, Callable[[Path, str], Callable[[], int]]]] = [
     ("iterate_materialize", task_iterate_materialize),
     ("columnar_materialize", task_columnar_materialize),
     ("region_columnar", task_region_columnar),
+    ("region_fetch_arrow", task_region_fetch_arrow),
     ("region_fetch_bulk", task_region_fetch_bulk),
     ("region_fetch", task_region_fetch),
     ("arrow_export", task_arrow_export),

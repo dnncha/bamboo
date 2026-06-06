@@ -91,6 +91,32 @@ def test_mapq_filter_matches_pysam(tiny_bam_path: Path) -> None:
     assert bamboo_rows == pysam_rows
 
 
+def test_region_fetch_arrow_matches_pysam(tiny_bam_with_index: Path) -> None:
+    pa = pytest.importorskip("pyarrow")
+
+    region = "chr1:100-101"
+    with bamboo.AlignmentFile(str(tiny_bam_with_index)) as bam:
+        bamboo_table = bam.fetch_arrow(columns=COLUMNS, region=region)
+    assert isinstance(bamboo_table, pa.Table)
+
+    contig, interval = region.split(":", 1)
+    start_s, end_s = interval.split("-", 1)
+    start = max(int(start_s) - 1, 0)
+    end = int(end_s)
+
+    columns: dict[str, list] = {name: [] for name in COLUMNS}
+    with pysam.AlignmentFile(str(tiny_bam_with_index), "rb") as bam:
+        for read in bam.fetch(contig, start, end):
+            columns["qname"].append(read.query_name)
+            columns["rname"].append(read.reference_name)
+            columns["pos"].append(read.reference_start)
+            columns["mapq"].append(read.mapping_quality)
+            columns["cigar"].append(read.cigarstring)
+    pysam_table = pa.table(columns)
+
+    assert _arrow_dict(bamboo_table) == _arrow_dict(pysam_table)
+
+
 def test_arrow_columns_match_pysam(tiny_bam_path: Path) -> None:
     pa = pytest.importorskip("pyarrow")
 

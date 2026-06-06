@@ -2,7 +2,9 @@ use crate::errors;
 use crate::{build_scan_options, table::table_to_pyarrow};
 use bamboo_core::{BamScanOptions, FetchRegion};
 use bamboo_core::BamTable;
-use bamboo_noodles::{scan_reader, AlignedRecord, BamReader, BamRecordStream, BamWriter};
+use bamboo_noodles::{
+    scan_reader, AlignedRecord, BamReader, BamRecordStream, BamWriter, CramRecordStream,
+};
 use pyo3::exceptions::{PyStopIteration, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -78,6 +80,7 @@ impl PyAlignedSegment {
 enum AlignmentIterInner {
     Stream(BamRecordStream),
     Table { table: BamTable, index: usize },
+    CramStream(CramRecordStream),
 }
 
 #[pyclass(name = "AlignmentIterator")]
@@ -95,6 +98,12 @@ impl PyAlignmentIterator {
     fn from_table(table: BamTable) -> Self {
         Self {
             inner: AlignmentIterInner::Table { table, index: 0 },
+        }
+    }
+
+    pub(crate) fn from_cram_stream(stream: CramRecordStream) -> Self {
+        Self {
+            inner: AlignmentIterInner::CramStream(stream),
         }
     }
 }
@@ -120,6 +129,11 @@ impl PyAlignmentIterator {
                 *index += 1;
                 Ok(Some(PyAlignedSegment { inner: record }))
             }
+            AlignmentIterInner::CramStream(stream) => match stream.next() {
+                Some(Ok(record)) => Ok(Some(PyAlignedSegment { inner: record })),
+                Some(Err(err)) => Err(errors::noodles_to_py_err(err)),
+                None => Err(PyStopIteration::new_err(())),
+            },
         }
     }
 }

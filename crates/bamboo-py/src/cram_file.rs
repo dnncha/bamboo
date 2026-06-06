@@ -1,4 +1,6 @@
+use crate::alignment::PyAlignmentIterator;
 use crate::errors;
+use bamboo_core::{BamScanOptions, FetchRegion};
 use bamboo_noodles::CramReader;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -27,6 +29,47 @@ impl PyCramFile {
         _traceback: Option<PyObject>,
     ) -> PyResult<bool> {
         Ok(false)
+    }
+
+    fn __iter__(slf: PyRef<'_, Self>) -> PyResult<PyAlignmentIterator> {
+        let options = BamScanOptions::iteration_defaults();
+        let stream = slf
+            .reader
+            .open_stream(options)
+            .map_err(errors::noodles_to_py_err)?;
+        Ok(PyAlignmentIterator::from_cram_stream(stream))
+    }
+
+    #[pyo3(signature = (contig=None, start=None, stop=None, region=None, min_mapq=None))]
+    fn fetch(
+        &self,
+        contig: Option<String>,
+        start: Option<u32>,
+        stop: Option<u32>,
+        region: Option<String>,
+        min_mapq: Option<u8>,
+    ) -> PyResult<PyAlignmentIterator> {
+        let fetch_region = if let Some(region) = region {
+            Some(FetchRegion::from_samtools_region(&region).map_err(errors::into_py_err)?)
+        } else if let Some(contig) = contig {
+            Some(FetchRegion {
+                reference_name: contig,
+                start,
+                end: stop,
+            })
+        } else {
+            None
+        };
+
+        let mut options = BamScanOptions::iteration_defaults();
+        options.region = fetch_region;
+        options.min_mapq = min_mapq;
+
+        let stream = self
+            .reader
+            .open_stream(options)
+            .map_err(errors::noodles_to_py_err)?;
+        Ok(PyAlignmentIterator::from_cram_stream(stream))
     }
 
     fn count(&self) -> PyResult<usize> {

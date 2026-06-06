@@ -26,6 +26,7 @@ TASK_LABELS = {
     "iterate_materialize": "Iterate + materialize",
     "columnar_materialize": "Columnar scan (recommended)",
     "region_fetch_bulk": "Indexed region fetch (bulk)",
+    "region_fetch_arrow": "Indexed region Arrow fetch",
     "region_fetch": "Indexed region fetch",
     "arrow_export": "Arrow table export",
     "write_roundtrip": "Write round-trip",
