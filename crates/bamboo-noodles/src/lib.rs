@@ -2,6 +2,7 @@
 
 pub mod fixtures;
 mod columnar;
+mod lazy_fetch;
 mod error;
 mod header_util;
 mod reader;

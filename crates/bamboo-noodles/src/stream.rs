@@ -1,4 +1,5 @@
 use crate::error::NoodlesError;
+use crate::lazy_fetch::LazyIndexedFetch;
 use crate::record::AlignedRecord;
 use bamboo_core::BamScanOptions;
 use bamboo_io::{BamSource, BamStorage};
@@ -6,9 +7,9 @@ use noodles::bam as bam;
 use noodles::bgzf as bgzf;
 use noodles::sam::Header;
 
-use std::collections::VecDeque;
 use std::fs::File;
-use std::io::Cursor;
+use std::io::{BufReader, Cursor};
+use std::num::NonZeroUsize;
 use std::path::Path;
 
 /// A lazy record stream over a BAM source.
@@ -38,21 +39,19 @@ struct RemoteScan {
 }
 
 struct LocalFetch {
-    header: Header,
+    fetch: LazyIndexedFetch<bgzf::Reader<File>>,
     options: BamScanOptions,
-    pending: VecDeque<bam::Record>,
 }
 
 struct RemoteFetch {
-    header: Header,
+    fetch: LazyIndexedFetch<bgzf::Reader<Cursor<std::sync::Arc<[u8]>>>>,
     options: BamScanOptions,
-    pending: VecDeque<bam::Record>,
 }
 
 impl BamRecordStream {
     pub fn open(source: &BamSource, header: &Header, options: BamScanOptions) -> Result<Self, NoodlesError> {
         if options.region.is_some() && bamboo_io::has_index(source) {
-            Self::open_fetch(source, header, options)
+            Self::open_fetch(source, options)
         } else {
             Self::open_scan(source, header, options)
         }
@@ -89,7 +88,7 @@ impl BamRecordStream {
         }
     }
 
-    fn open_fetch(source: &BamSource, _header: &Header, options: BamScanOptions) -> Result<Self, NoodlesError> {
+    fn open_fetch(source: &BamSource, options: BamScanOptions) -> Result<Self, NoodlesError> {
         let region = options
             .region
             .as_ref()
@@ -105,20 +104,9 @@ impl BamRecordStream {
                     .build_from_path(path)
                     .map_err(NoodlesError::from)?;
                 let header = reader.read_header().map_err(NoodlesError::from)?;
-                let mut pending = VecDeque::new();
-                for result in reader
-                    .query(&header, &parsed_region)
-                    .map_err(NoodlesError::from)?
-                {
-                    pending.push_back(result.map_err(NoodlesError::from)?);
-                }
-                let _ = reader;
+                let fetch = LazyIndexedFetch::open(reader, header, &parsed_region)?;
                 Ok(Self {
-                    inner: StreamInner::LocalFetch(LocalFetch {
-                        header,
-                        options,
-                        pending,
-                    }),
+                    inner: StreamInner::LocalFetch(LocalFetch { fetch, options }),
                 })
             }
             BamStorage::Remote { data, index_data, .. } => {
@@ -132,20 +120,9 @@ impl BamRecordStream {
                     .build_from_reader(Cursor::new(data.clone()))
                     .map_err(NoodlesError::from)?;
                 let header = reader.read_header().map_err(NoodlesError::from)?;
-                let mut pending = VecDeque::new();
-                for result in reader
-                    .query(&header, &parsed_region)
-                    .map_err(NoodlesError::from)?
-                {
-                    pending.push_back(result.map_err(NoodlesError::from)?);
-                }
-                let _ = reader;
+                let fetch = LazyIndexedFetch::open(reader, header, &parsed_region)?;
                 Ok(Self {
-                    inner: StreamInner::RemoteFetch(RemoteFetch {
-                        header,
-                        options,
-                        pending,
-                    }),
+                    inner: StreamInner::RemoteFetch(RemoteFetch { fetch, options }),
                 })
             }
         }
@@ -169,14 +146,12 @@ impl Iterator for BamRecordStream {
                 &state.options,
                 &mut state.record,
             ),
-            StreamInner::LocalFetch(state) => next_from_pending_bam_records(
-                &mut state.pending,
-                &state.header,
+            StreamInner::LocalFetch(state) => next_from_lazy_fetch(
+                &mut state.fetch,
                 &state.options,
             ),
-            StreamInner::RemoteFetch(state) => next_from_pending_bam_records(
-                &mut state.pending,
-                &state.header,
+            StreamInner::RemoteFetch(state) => next_from_lazy_fetch(
+                &mut state.fetch,
                 &state.options,
             ),
         }
@@ -205,18 +180,26 @@ fn next_from_bam_reader<R: std::io::Read>(
     }
 }
 
-fn next_from_pending_bam_records(
-    pending: &mut VecDeque<bam::Record>,
-    header: &Header,
+fn next_from_lazy_fetch<R>(
+    fetch: &mut LazyIndexedFetch<R>,
     options: &BamScanOptions,
-) -> Option<Result<AlignedRecord, NoodlesError>> {
-    while let Some(record) = pending.pop_front() {
+) -> Option<Result<AlignedRecord, NoodlesError>>
+where
+    R: bgzf::io::BufRead + bgzf::io::Seek,
+{
+    loop {
+        let record = match fetch.next_record() {
+            Ok(Some(record)) => record,
+            Ok(None) => return None,
+            Err(err) => return Some(Err(err)),
+        };
+
+        let header = fetch.header();
         let aligned = AlignedRecord::from_bam_record(header, &record, options);
         if aligned.passes_filters(options) {
             return Some(Ok(aligned));
         }
     }
-    None
 }
 
 pub fn count_records(source: &BamSource, _header: &Header) -> Result<usize, NoodlesError> {
@@ -227,9 +210,10 @@ pub fn count_records(source: &BamSource, _header: &Header) -> Result<usize, Nood
 }
 
 fn count_local_path(path: &Path) -> Result<usize, NoodlesError> {
-    let mut reader = bam::io::reader::Builder::default()
-        .build_from_path(path)
-        .map_err(NoodlesError::from)?;
+    let workers = std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
+    let file = File::open(path).map_err(NoodlesError::from)?;
+    let decoder = bgzf::MultithreadedReader::with_worker_count(workers, BufReader::new(file));
+    let mut reader = bam::io::Reader::from(decoder);
     reader.read_header().map_err(NoodlesError::from)?;
     count_reader_records(&mut reader)
 }
@@ -241,7 +225,7 @@ fn count_remote_bytes(data: &std::sync::Arc<[u8]>) -> Result<usize, NoodlesError
 }
 
 fn count_reader_records<R: std::io::Read>(
-    reader: &mut bam::io::Reader<bgzf::Reader<R>>,
+    reader: &mut bam::io::Reader<R>,
 ) -> Result<usize, NoodlesError> {
     let mut total = 0usize;
     let mut record = bam::Record::default();
