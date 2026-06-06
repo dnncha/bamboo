@@ -26,6 +26,10 @@ dev = [
     "ruff",
     "mypy",
 ]
+bench = [
+    "pysam>=0.22",
+    "matplotlib>=3.8",
+]
 
 [project.urls]
 Homepage = "https://github.com/donncha/bamboo"
@@ -49,5 +53,5 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "benchmarks"]
 addopts = "-v --tb=short"

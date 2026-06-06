@@ -71,3 +71,7 @@ htmlcov/
 # Temporary
 *.tmp
 *.log
+
+# Benchmark artifacts
+benchmarks/data/
+benchmarks/results/
