@@ -57,6 +57,8 @@ htmlcov/
 # Data files (examples, don't commit large test data)
 *.bam
 *.bai
+!tests/data/*.bam
+!tests/data/*.bai
 *.cram
 *.crai
 *.vcf.gz
