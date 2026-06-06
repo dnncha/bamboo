@@ -9,7 +9,7 @@ use alignment::{PyAlignedSegment, PyAlignmentFile, PyAlignmentIterator};
 use cram_file::PyCramFile;
 use variant::{PyVariantFile, PyVariantRecord};
 use bamboo_core::{BamColumn, BamScanOptions, FetchRegion};
-use bamboo_noodles::scan_bam;
+use bamboo_noodles::{scan_bam, scan_cram};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -25,6 +25,7 @@ fn _bamboo(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_bam_table, m)?)?;
     m.add_function(wrap_pyfunction!(scan_bam_table, m)?)?;
     m.add_function(wrap_pyfunction!(read_columns, m)?)?;
+    m.add_function(wrap_pyfunction!(read_cram_columns, m)?)?;
     m.add_class::<PyVariantFile>()?;
     m.add_class::<PyVariantRecord>()?;
     m.add_function(wrap_pyfunction!(read_vcf_table, m)?)?;
@@ -101,6 +102,23 @@ fn read_columns(
         min_mapq,
         reference_name,
     )
+}
+
+#[pyfunction]
+#[pyo3(signature = (path, *, columns=None, tags=None, region=None, min_mapq=None, reference_filename=None))]
+fn read_cram_columns(
+    py: Python<'_>,
+    path: String,
+    columns: Option<Vec<String>>,
+    tags: Option<Vec<String>>,
+    region: Option<String>,
+    min_mapq: Option<u8>,
+    reference_filename: Option<String>,
+) -> PyResult<PyObject> {
+    let options = build_scan_options(columns, tags, region, min_mapq, None)?;
+    let table = scan_cram(&path, options, reference_filename.as_deref())
+        .map_err(errors::noodles_to_py_err)?;
+    table_to_pyarrow(py, &table)
 }
 
 pub(crate) fn build_scan_options(

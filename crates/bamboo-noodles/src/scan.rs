@@ -1,4 +1,5 @@
 use crate::columnar::scan_reader_columnar;
+use crate::cram::CramReader;
 use crate::error::NoodlesError;
 use crate::reader::BamReader;
 use crate::record::AlignedRecord;
@@ -15,7 +16,22 @@ pub fn scan_reader(reader: &BamReader, options: BamScanOptions) -> Result<BamTab
     scan_reader_columnar(reader.source(), reader.header(), options)
 }
 
-#[allow(dead_code)]
+/// Scan a CRAM file into a columnar `BamTable`.
+pub fn scan_cram(
+    path: &str,
+    options: BamScanOptions,
+    reference_fasta: Option<&str>,
+) -> Result<BamTable, NoodlesError> {
+    let reader = CramReader::open_with_reference(path, reference_fasta)?;
+    scan_cram_reader(&reader, options)
+}
+
+/// Scan an open CRAM reader into a columnar `BamTable`.
+pub fn scan_cram_reader(reader: &CramReader, options: BamScanOptions) -> Result<BamTable, NoodlesError> {
+    let records = reader.iter_records(&options)?;
+    Ok(records_to_table(records, &options))
+}
+
 pub fn records_to_table(records: Vec<AlignedRecord>, options: &BamScanOptions) -> BamTable {
     let mut table = BamTable::new(options.columns.clone(), options.tags.clone());
     for record in records {

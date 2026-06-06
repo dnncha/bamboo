@@ -121,6 +121,10 @@ impl CramReader {
         let options = BamScanOptions::iteration_defaults();
         Ok(self.iter_records(&options)?.len())
     }
+
+    pub fn scan(&self, options: BamScanOptions) -> Result<bamboo_core::BamTable, NoodlesError> {
+        crate::scan::scan_cram_reader(self, options)
+    }
 }
 
 fn cram_index_path(path: &str) -> PathBuf {
@@ -335,6 +339,29 @@ mod tests {
         .collect::<Vec<_>>();
 
         assert_eq!(indexed, linear);
+    }
+
+    #[test]
+    fn scans_tiny_cram_to_columnar_table() {
+        let dir = tempdir().unwrap();
+        let cram_path = tiny_cram_path(dir.path());
+        let bam_path = tiny_bam_path(dir.path());
+        write_tiny_cram(&cram_path).unwrap();
+        write_tiny_bam(&bam_path).unwrap();
+
+        let options = BamScanOptions {
+            columns: vec![BamColumn::QueryName, BamColumn::Position, BamColumn::MappingQuality],
+            ..Default::default()
+        };
+
+        let cram_table = crate::scan::scan_cram(cram_path.to_str().unwrap(), options.clone(), None).unwrap();
+        let bam_reader = crate::BamReader::open(bam_path.to_str().unwrap()).unwrap();
+        let bam_table = crate::scan::scan_reader(&bam_reader, options).unwrap();
+
+        assert_eq!(cram_table.len(), bam_table.len());
+        assert_eq!(cram_table.qname, bam_table.qname);
+        assert_eq!(cram_table.pos, bam_table.pos);
+        assert_eq!(cram_table.mapq, bam_table.mapq);
     }
 
     #[test]

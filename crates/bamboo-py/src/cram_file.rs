@@ -1,5 +1,6 @@
 use crate::alignment::PyAlignmentIterator;
 use crate::errors;
+use crate::{build_scan_options, table::table_to_pyarrow};
 use bamboo_core::{BamScanOptions, FetchRegion};
 use bamboo_noodles::CramReader;
 use pyo3::prelude::*;
@@ -108,5 +109,34 @@ impl PyCramFile {
             dict.set_item(name, length)?;
         }
         Ok(dict.into())
+    }
+
+    #[pyo3(signature = (*, columns=None, tags=None, region=None, min_mapq=None))]
+    fn read_table(
+        &self,
+        py: Python<'_>,
+        columns: Option<Vec<String>>,
+        tags: Option<Vec<String>>,
+        region: Option<String>,
+        min_mapq: Option<u8>,
+    ) -> PyResult<PyObject> {
+        self.to_arrow(py, columns, tags, region, min_mapq)
+    }
+
+    #[pyo3(signature = (*, columns=None, tags=None, region=None, min_mapq=None))]
+    fn to_arrow(
+        &self,
+        py: Python<'_>,
+        columns: Option<Vec<String>>,
+        tags: Option<Vec<String>>,
+        region: Option<String>,
+        min_mapq: Option<u8>,
+    ) -> PyResult<PyObject> {
+        let options = build_scan_options(columns, tags, region, min_mapq, None)?;
+        let table = self
+            .reader
+            .scan(options)
+            .map_err(errors::noodles_to_py_err)?;
+        table_to_pyarrow(py, &table)
     }
 }

@@ -12,6 +12,7 @@ def test_public_api_exports() -> None:
     assert bm.CramFile is not None
     assert bm.VariantFile is not None
     assert bm.read_vcf_table is not None
+    assert bm.read_cram_columns is not None
 
 
 def test_public_api_exports_bam() -> None:

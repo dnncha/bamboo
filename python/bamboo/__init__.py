@@ -20,6 +20,7 @@ try:
         __version__ as _rust_version,
         read_bam_table,
         read_columns,
+        read_cram_columns,
         read_vcf_table,
         scan_bam_table,
     )
@@ -34,6 +35,7 @@ except ImportError:
     VariantRecord = None  # type: ignore[assignment,misc]
     read_bam_table = None  # type: ignore[assignment,misc]
     read_columns = None  # type: ignore[assignment,misc]
+    read_cram_columns = None  # type: ignore[assignment,misc]
     read_vcf_table = None  # type: ignore[assignment,misc]
     scan_bam_table = None  # type: ignore[assignment,misc]
     compat = None  # type: ignore[assignment,misc]
@@ -54,6 +56,7 @@ __all__ = [
     "compat",
     "read_bam_table",
     "read_columns",
+    "read_cram_columns",
     "read_vcf_table",
     "scan_bam_table",
     "to_polars",

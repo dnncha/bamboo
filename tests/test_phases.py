@@ -73,6 +73,18 @@ def test_phase2_cram_reader(tiny_cram_with_index: Path) -> None:
         assert len(list(cram.fetch(region="chr1:100-101"))) == 1
 
 
+def test_phase2_cram_columnar(tiny_cram_with_index: Path) -> None:
+    pa = pytest.importorskip("pyarrow")
+
+    table = bamboo.read_cram_columns(
+        str(tiny_cram_with_index),
+        columns=["qname", "pos"],
+        region="chr1:100-101",
+    )
+    assert isinstance(table, pa.Table)
+    assert table.num_rows == 1
+
+
 @pytest.fixture(scope="session")
 def tiny_cram_with_index() -> Path:
     path = Path(__file__).resolve().parent / "data" / "tiny.cram"
