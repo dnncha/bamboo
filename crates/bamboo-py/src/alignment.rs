@@ -1,11 +1,15 @@
 use crate::errors;
 use crate::{build_scan_options, table::table_to_pyarrow};
 use bamboo_core::{BamScanOptions, FetchRegion};
-use bamboo_noodles::{scan_bam, AlignedRecord, BamReader};
-use pyo3::exceptions::PyStopIteration;
+use bamboo_noodles::{scan_bam, AlignedRecord, BamReader, BamWriter};
+use pyo3::exceptions::{PyStopIteration, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+enum AlignmentFileInner {
+    Read(BamReader),
+    Write(BamWriter),
+}
 
 #[pyclass(name = "AlignedSegment")]
 pub struct PyAlignedSegment {
@@ -94,21 +98,41 @@ impl PyAlignmentIterator {
 
 #[pyclass(name = "AlignmentFile")]
 pub struct PyAlignmentFile {
-    reader: BamReader,
+    inner: AlignmentFileInner,
 }
 
 #[pymethods]
 impl PyAlignmentFile {
     #[new]
-    #[pyo3(signature = (path, mode="rb"))]
-    fn new(path: String, mode: &str) -> PyResult<Self> {
-        if mode != "rb" && mode != "r" {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Bamboo MVP only supports read mode, got '{mode}'"
-            )));
+    #[pyo3(signature = (path, mode="rb", *, header=None, template=None))]
+    fn new(
+        path: String,
+        mode: &str,
+        header: Option<&Bound<'_, PyDict>>,
+        template: Option<PyRef<'_, PyAlignmentFile>>,
+    ) -> PyResult<Self> {
+        match mode {
+            "rb" | "r" => {
+                if header.is_some() || template.is_some() {
+                    return Err(PyValueError::new_err(
+                        "header and template are only valid for write mode",
+                    ));
+                }
+                let reader = BamReader::open(&path).map_err(errors::noodles_to_py_err)?;
+                Ok(Self {
+                    inner: AlignmentFileInner::Read(reader),
+                })
+            }
+            "wb" | "w" => {
+                let writer = open_write_handle(&path, header, template)?;
+                Ok(Self {
+                    inner: AlignmentFileInner::Write(writer),
+                })
+            }
+            other => Err(PyValueError::new_err(format!(
+                "unsupported AlignmentFile mode '{other}' (use 'rb', 'r', 'wb', or 'w')"
+            ))),
         }
-        let reader = BamReader::open(&path).map_err(errors::noodles_to_py_err)?;
-        Ok(Self { reader })
     }
 
     fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
@@ -116,12 +140,22 @@ impl PyAlignmentFile {
     }
 
     fn __exit__(
-        &self,
+        &mut self,
         _exc_type: Option<PyObject>,
         _exc: Option<PyObject>,
         _traceback: Option<PyObject>,
     ) -> PyResult<bool> {
+        if let AlignmentFileInner::Write(writer) = &mut self.inner {
+            writer.finish().map_err(errors::noodles_to_py_err)?;
+        }
         Ok(false)
+    }
+
+    fn close(&mut self) -> PyResult<()> {
+        if let AlignmentFileInner::Write(writer) = &mut self.inner {
+            writer.finish().map_err(errors::noodles_to_py_err)?;
+        }
+        Ok(())
     }
 
     fn __iter__(slf: PyRef<'_, Self>) -> PyResult<PyAlignmentIterator> {
@@ -137,6 +171,8 @@ impl PyAlignmentFile {
         region: Option<String>,
         min_mapq: Option<u8>,
     ) -> PyResult<PyAlignmentIterator> {
+        let reader = self.reader().map_err(errors::into_py_err)?;
+
         let fetch_region = if let Some(region) = region {
             Some(FetchRegion::from_samtools_region(&region).map_err(errors::into_py_err)?)
         } else if let Some(contig) = contig {
@@ -155,34 +191,64 @@ impl PyAlignmentFile {
             ..BamScanOptions::default()
         };
 
-        let records = self
-            .reader
+        let records = reader
             .iter_records(&options)
             .map_err(errors::noodles_to_py_err)?;
         Ok(PyAlignmentIterator { records, index: 0 })
     }
 
-    fn count(&self) -> PyResult<usize> {
-        self.reader.count_records().map_err(errors::noodles_to_py_err)
+    fn write(&mut self, record: &PyAlignedSegment) -> PyResult<()> {
+        match &mut self.inner {
+            AlignmentFileInner::Write(writer) => writer
+                .write_record(&record.inner)
+                .map_err(errors::noodles_to_py_err),
+            AlignmentFileInner::Read(_) => Err(PyValueError::new_err(
+                "AlignmentFile is not open for writing",
+            )),
+        }
     }
 
-    fn references(&self) -> Vec<String> {
-        self.reader.reference_names()
+    fn count(&self) -> PyResult<usize> {
+        self.reader()?
+            .count_records()
+            .map_err(errors::noodles_to_py_err)
+    }
+
+    fn references(&self) -> PyResult<Vec<String>> {
+        Ok(self.reader()?.reference_names())
     }
 
     #[getter]
-    fn reference_lengths(&self) -> Vec<u32> {
-        self.reader.reference_lengths()
+    fn reference_lengths(&self) -> PyResult<Vec<u32>> {
+        Ok(self.reader()?.reference_lengths())
     }
 
-    fn has_index(&self) -> bool {
-        self.reader.has_index()
+    fn has_index(&self) -> PyResult<bool> {
+        Ok(self.reader()?.has_index())
     }
 
     fn header(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let (names, lengths) = match &self.inner {
+            AlignmentFileInner::Read(reader) => {
+                (reader.reference_names(), reader.reference_lengths())
+            }
+            AlignmentFileInner::Write(writer) => {
+                let header = writer.header();
+                let names: Vec<String> = header
+                    .reference_sequences()
+                    .keys()
+                    .map(|name| name.to_string())
+                    .collect();
+                let lengths: Vec<u32> = header
+                    .reference_sequences()
+                    .values()
+                    .map(|reference| reference.length().get() as u32)
+                    .collect();
+                (names, lengths)
+            }
+        };
+
         let dict = PyDict::new_bound(py);
-        let names = self.reader.reference_names();
-        let lengths = self.reader.reference_lengths();
         for (name, length) in names.iter().zip(lengths.iter()) {
             dict.set_item(name, length)?;
         }
@@ -199,15 +265,74 @@ impl PyAlignmentFile {
         min_mapq: Option<u8>,
         reference_name: Option<String>,
     ) -> PyResult<PyObject> {
+        let uri = match &self.inner {
+            AlignmentFileInner::Read(reader) => reader.uri().to_string(),
+            AlignmentFileInner::Write(_) => {
+                return Err(PyValueError::new_err(
+                    "to_arrow() requires a read-mode AlignmentFile",
+                ));
+            }
+        };
         let options = build_scan_options(columns, tags, region, min_mapq, reference_name)?;
-        let table = scan_bam(self.reader.uri(), options)
-        .map_err(errors::noodles_to_py_err)?;
+        let table = scan_bam(&uri, options).map_err(errors::noodles_to_py_err)?;
         table_to_pyarrow(py, &table)
     }
 
     fn filename(&self) -> String {
-        self.reader.uri().to_string()
+        match &self.inner {
+            AlignmentFileInner::Read(reader) => reader.uri().to_string(),
+            AlignmentFileInner::Write(writer) => writer.path().to_string(),
+        }
     }
+
+    #[getter]
+    fn mode(&self) -> &'static str {
+        match self.inner {
+            AlignmentFileInner::Read(_) => "rb",
+            AlignmentFileInner::Write(_) => "wb",
+        }
+    }
+}
+
+impl PyAlignmentFile {
+    fn reader(&self) -> Result<&BamReader, PyErr> {
+        match &self.inner {
+            AlignmentFileInner::Read(reader) => Ok(reader),
+            AlignmentFileInner::Write(_) => Err(PyValueError::new_err(
+                "this operation requires a read-mode AlignmentFile",
+            )),
+        }
+    }
+}
+
+fn open_write_handle(
+    path: &str,
+    header: Option<&Bound<'_, PyDict>>,
+    template: Option<PyRef<'_, PyAlignmentFile>>,
+) -> PyResult<BamWriter> {
+    if let Some(template) = template {
+        return match &template.inner {
+            AlignmentFileInner::Read(reader) => {
+                BamWriter::create_from_reader(path, reader).map_err(errors::noodles_to_py_err)
+            }
+            AlignmentFileInner::Write(_) => Err(PyValueError::new_err(
+                "template must be a read-mode AlignmentFile",
+            )),
+        };
+    }
+
+    let header_dict = header.ok_or_else(|| {
+        PyValueError::new_err("write mode requires header= or template=")
+    })?;
+
+    let mut refs = Vec::new();
+    for (key, value) in header_dict.iter() {
+        let name: String = key.extract()?;
+        let length: u32 = value.extract()?;
+        refs.push((name, length));
+    }
+
+    BamWriter::create_with_references(path, &refs).map_err(errors::noodles_to_py_err)
 }
 
 fn tag_value_to_py(py: Python<'_>, value: &bamboo_core::TagValue) -> PyResult<PyObject> {

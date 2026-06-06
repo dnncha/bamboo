@@ -55,6 +55,23 @@ def test_alignment_file_to_arrow(tiny_bam_path: Path) -> None:
     assert table.column("qname")[0].as_py() == "read1"
 
 
+def test_alignment_file_write_round_trip(tiny_bam_path: Path, tmp_path: Path) -> None:
+    out_path = tmp_path / "copy.bam"
+
+    with bamboo.AlignmentFile(str(tiny_bam_path)) as src:
+        with bamboo.AlignmentFile(str(out_path), "wb", template=src) as out:
+            assert out.mode == "wb"
+            for read in src:
+                out.write(read)
+
+    with bamboo.AlignmentFile(str(out_path)) as copied:
+        assert copied.count() == 2
+        assert copied.references() == ["chr1", "chr2"]
+        reads = list(copied.fetch(contig="chr1", start=50, stop=150))
+        assert len(reads) == 1
+        assert reads[0].query_name == "read1"
+
+
 def test_alignment_file_opens_file_uri(tiny_bam_with_index: Path) -> None:
     uri = f"file://{tiny_bam_with_index}"
     with bamboo.AlignmentFile(uri) as bam:

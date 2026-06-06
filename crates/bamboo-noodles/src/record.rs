@@ -1,8 +1,16 @@
+use crate::error::NoodlesError;
 use bamboo_core::{BamColumn, BamScanOptions, BamTable, TagValue};
 use noodles::sam::Header;
 use noodles::sam::alignment::RecordBuf;
+use noodles::sam::alignment::record::Flags;
+use noodles::sam::alignment::record::MappingQuality;
+use noodles::sam::alignment::record::cigar::Op;
 use noodles::sam::alignment::record::cigar::op::Kind;
 use noodles::sam::alignment::record::data::field::Tag;
+use noodles::sam::alignment::record_buf::Cigar;
+use noodles::sam::alignment::record_buf::Data;
+use noodles::sam::alignment::record_buf::QualityScores;
+use noodles::sam::alignment::record_buf::Sequence;
 use noodles::sam::alignment::record_buf::data::field::Value;
 
 /// A single parsed alignment record exposed to Python.
@@ -103,6 +111,82 @@ impl AlignedRecord {
         true
     }
 
+    pub fn to_record_buf(&self, header: &Header) -> Result<RecordBuf, NoodlesError> {
+        let mut builder = RecordBuf::builder().set_flags(Flags::from_bits_truncate(self.flag));
+
+        if let Some(name) = &self.query_name {
+            builder = builder.set_name(name.as_str());
+        }
+
+        if let Some(reference_name) = &self.reference_name {
+            let id = header
+                .reference_sequences()
+                .get_index_of(reference_name.as_bytes())
+                .ok_or_else(|| NoodlesError::MissingReference {
+                    name: reference_name.clone(),
+                })?;
+            builder = builder.set_reference_sequence_id(id);
+        }
+
+        if let Some(start) = self.reference_start {
+            let position = noodles::core::Position::try_from((start + 1) as usize).map_err(|err| {
+                NoodlesError::Message(format!("invalid alignment start {start}: {err}"))
+            })?;
+            builder = builder.set_alignment_start(position);
+        }
+
+        if let Some(mapq) = self.mapping_quality {
+            let quality = MappingQuality::try_from(mapq).map_err(|err| {
+                NoodlesError::Message(format!("invalid mapping quality {mapq}: {err}"))
+            })?;
+            builder = builder.set_mapping_quality(quality);
+        }
+
+        if !self.cigar.is_empty() && self.cigar != "*" {
+            builder = builder.set_cigar(parse_cigar(&self.cigar)?);
+        }
+
+        if let Some(mate_reference_name) = &self.mate_reference_name {
+            if let Some(id) = header
+                .reference_sequences()
+                .get_index_of(mate_reference_name.as_bytes())
+            {
+                builder = builder.set_mate_reference_sequence_id(id);
+            }
+        }
+
+        if let Some(start) = self.mate_reference_start {
+            let position = noodles::core::Position::try_from((start + 1) as usize).map_err(|err| {
+                NoodlesError::Message(format!("invalid mate alignment start {start}: {err}"))
+            })?;
+            builder = builder.set_mate_alignment_start(position);
+        }
+
+        if let Some(template_length) = self.template_length {
+            builder = builder.set_template_length(template_length);
+        }
+
+        if let Some(sequence) = &self.query_sequence {
+            builder = builder.set_sequence(Sequence::from(sequence.as_bytes()));
+        }
+
+        if let Some(qualities) = &self.query_qualities {
+            builder = builder.set_quality_scores(QualityScores::from(qualities.as_bytes().to_vec()));
+        }
+
+        let mut data = Data::default();
+        for (name, value) in &self.tags {
+            if matches!(value, TagValue::Missing) {
+                continue;
+            }
+            let tag = tag_from_name(name)?;
+            data.insert(tag, tag_value_to_noodles(value)?);
+        }
+        builder = builder.set_data(data);
+
+        Ok(builder.build())
+    }
+
     pub fn append_to_table(&self, table: &mut BamTable, options: &BamScanOptions) {
         for column in &options.columns {
             match column {
@@ -166,6 +250,74 @@ fn bytes_to_optional_string(bytes: &[u8]) -> Option<String> {
     } else {
         Some(String::from_utf8_lossy(bytes).into_owned())
     }
+}
+
+fn parse_cigar(cigar: &str) -> Result<Cigar, NoodlesError> {
+    let mut ops = Vec::new();
+    let mut digits = String::new();
+
+    for ch in cigar.chars() {
+        if ch.is_ascii_digit() {
+            digits.push(ch);
+            continue;
+        }
+
+        let len = if digits.is_empty() {
+            1
+        } else {
+            digits
+                .parse::<usize>()
+                .map_err(|err| NoodlesError::Message(format!("invalid CIGAR '{cigar}': {err}")))?
+        };
+        digits.clear();
+        ops.push(Op::new(char_to_kind(ch)?, len));
+    }
+
+    if !digits.is_empty() {
+        return Err(NoodlesError::Message(format!(
+            "invalid CIGAR '{cigar}': trailing digits without operation"
+        )));
+    }
+
+    Ok(ops.into_iter().collect())
+}
+
+fn char_to_kind(ch: char) -> Result<Kind, NoodlesError> {
+    Ok(match ch {
+        'M' => Kind::Match,
+        'I' => Kind::Insertion,
+        'D' => Kind::Deletion,
+        'N' => Kind::Skip,
+        'S' => Kind::SoftClip,
+        'H' => Kind::HardClip,
+        'P' => Kind::Pad,
+        '=' => Kind::SequenceMatch,
+        'X' => Kind::SequenceMismatch,
+        other => {
+            return Err(NoodlesError::Message(format!(
+                "invalid CIGAR operation '{other}'"
+            )));
+        }
+    })
+}
+
+fn tag_from_name(name: &str) -> Result<Tag, NoodlesError> {
+    let bytes = name.as_bytes();
+    if bytes.len() != 2 {
+        return Err(NoodlesError::Message(format!(
+            "auxiliary tag names must be two characters, got '{name}'"
+        )));
+    }
+    Ok(Tag::from([bytes[0], bytes[1]]))
+}
+
+fn tag_value_to_noodles(value: &TagValue) -> Result<Value, NoodlesError> {
+    Ok(match value {
+        TagValue::Int(v) => Value::from(*v as i32),
+        TagValue::Float(v) => Value::from(*v as f32),
+        TagValue::String(v) => Value::from(v.as_str()),
+        TagValue::Missing => Value::from(""),
+    })
 }
 
 fn convert_tag_value(value: &Value) -> TagValue {

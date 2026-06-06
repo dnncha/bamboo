@@ -30,12 +30,13 @@ Implemented today:
 - Rust workspace (`bamboo-core`, `bamboo-io`, `bamboo-noodles`, `bamboo-py`)
 - `bamboo.AlignmentFile` with iteration, region fetch, and indexed fetch (`.bai`)
 - Unified path I/O via `bamboo-io`: local paths, `file://`, `https://`, `s3://`, and `gs://`
+- BAM writing via `AlignmentFile(..., "wb")` with `write()` and pysam-style `template=`
 - Columnar scan to PyArrow via `read_bam_table()` and `AlignmentFile.to_arrow()`
 - Polars helper via `bamboo.to_polars()`
 - Test fixtures and examples
 
 Still planned for full MVP:
-- BAM/CRAM writing and CRAM decoding (via `bamboo-htslib`)
+- CRAM decoding and SAM/CRAM writing (via `bamboo-htslib`)
 - Basic VCF/BCF support
 - PyPI / Bioconda packaging
 - Comprehensive test suite against real-world data (long reads, weird tags)
@@ -115,6 +116,26 @@ with bm.AlignmentFile("https://example.com/public/sample.bam") as bam:
 ```
 
 Index discovery tries `sample.bam.bai` then `sample.bai` next to the BAM URI. For indexed `fetch()`, the `.bai` must be reachable at one of those locations.
+
+## Writing BAMs
+
+BAM writing uses local paths today (`wb` / `w` mode). Copy reads from an existing file with a pysam-style template header:
+
+```python
+import bamboo as bm
+
+with bm.AlignmentFile("input.bam") as src:
+    with bm.AlignmentFile("output.bam", "wb", template=src) as out:
+        for read in src:
+            out.write(read)
+```
+
+Or supply a reference dictionary when creating a new file:
+
+```python
+with bm.AlignmentFile("output.bam", "wb", header={"chr1": 248956422}) as out:
+    out.write(read)
+```
 
 ## Quick Vision for the API
 
