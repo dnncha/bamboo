@@ -33,6 +33,7 @@ Repository = "https://github.com/donncha/bamboo"
 Issues = "https://github.com/donncha/bamboo/issues"
 
 [tool.maturin]
+manifest-path = "crates/bamboo-py/Cargo.toml"
 python-source = "python"
 module-name = "bamboo._bamboo"
 features = ["pyo3/extension-module"]

@@ -1,0 +1,18 @@
+[package]
+name = "bamboo-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Python bindings for Bamboo"
+authors.workspace = true
+
+[lib]
+name = "_bamboo"
+crate-type = ["cdylib"]
+
+[dependencies]
+bamboo-core = { path = "../bamboo-core" }
+bamboo-htslib = { path = "../bamboo-htslib" }
+bamboo-noodles = { path = "../bamboo-noodles" }
+pyo3 = { version = "0.21", features = ["extension-module"] }

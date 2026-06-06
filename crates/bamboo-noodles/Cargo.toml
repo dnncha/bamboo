@@ -1,0 +1,20 @@
+[package]
+name = "bamboo-noodles"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Noodles-backed BAM reader and scanner for Bamboo"
+authors.workspace = true
+
+[dependencies]
+bamboo-core = { path = "../bamboo-core" }
+noodles = { version = "0.90", features = ["bam", "sam", "bgzf", "core"] }
+thiserror = "2"
+
+[[example]]
+name = "generate_fixtures"
+path = "examples/generate_fixtures.rs"
+
+[dev-dependencies]
+tempfile = "3"

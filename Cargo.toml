@@ -1,34 +1,19 @@
-[package]
-name = "bamboo-hts"
-version = "0.1.0"
+[workspace]
+members = [
+    "crates/bamboo-core",
+    "crates/bamboo-noodles",
+    "crates/bamboo-htslib",
+    "crates/bamboo-py",
+]
+resolver = "2"
+
+[workspace.package]
 edition = "2021"
-authors = ["Bamboo Contributors"]
-description = "Rust core for Bamboo - high-performance HTS data library for Python"
 license = "MIT"
 repository = "https://github.com/donncha/bamboo"
-keywords = ["bioinformatics", "genomics", "bam", "hts", "vcf", "arrow"]
-categories = ["science", "parsing"]
-
-[lib]
-name = "bamboo"
-crate-type = ["cdylib"]
-
-[dependencies]
-pyo3 = { version = "0.23", features = ["extension-module"] }
-
-# Core HTS parsing - we will lean on noodles heavily for correctness and speed
-# noodles = { version = "0.90", features = ["bam", "cram", "sam", "vcf", "bcf", "bgzf", "tabix"] }
-
-# Arrow integration for the data science story
-# arrow = { version = "52", default-features = false }
-# arrow-arith = { version = "52" }
-
-# For cloud support later
-# object_store = { version = "0.10", features = ["aws", "gcp", "azure"] }
-
-[features]
-default = []
-# full = ["noodles/full"]  # once we expand
+version = "0.1.0"
+description = "High-performance HTS data library for Python"
+authors = ["Bamboo Contributors"]
 
 [profile.release]
 lto = true

@@ -24,20 +24,21 @@ Bamboo aims to be the library you actually want to use when writing modern genom
 
 ## Current Status
 
-**Early stage / proof of concept.**
+**MVP milestone: BAM reading works.**
 
-This repository is the initial skeleton for the Bamboo project.
+Implemented today:
+- Rust workspace (`bamboo-core`, `bamboo-noodles`, `bamboo-py`)
+- `bamboo.AlignmentFile` with iteration, region fetch, and indexed fetch (`.bai`)
+- Columnar scan to PyArrow via `read_bam_table()` and `AlignmentFile.to_arrow()`
+- Polars helper via `bamboo.to_polars()`
+- Test fixtures and examples
 
-### Planned MVP (first usable release)
-
-- High-quality BAM/CRAM reader + writer (via Rust)
-- Clean Python API: `bamboo.AlignmentFile`, record iteration, header access, etc.
-- Native export to Arrow (zero-copy friendly path to Polars / pandas / DuckDB)
+Still planned for full MVP:
+- BAM/CRAM writing and CRAM decoding (via `bamboo-htslib`)
 - Basic VCF/BCF support
 - Cloud object store support (S3 + GCS at minimum)
-- Good documentation and examples
-- Bioconda + PyPI packages
-- Comprehensive test suite against real data (including CRAM, long reads, weird tags)
+- PyPI / Bioconda packaging
+- Comprehensive test suite against real-world data (long reads, weird tags)
 
 Later:
 - Full pysam-like API surface + compatibility layer
@@ -55,32 +56,55 @@ pip install bamboo
 conda install -c bioconda bamboo
 ```
 
-For development (once built):
+For development:
 
 ```bash
-pip install maturin
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install maturin pyarrow pytest
 maturin develop
+pytest
 ```
+
+Generate test fixtures:
+
+```bash
+cargo run -p bamboo-noodles --example generate_fixtures
+```
+
+## Quick Start
+
+```python
+import bamboo as bm
+
+with bm.AlignmentFile("aligned.bam") as bam:
+    print(bam.header())          # {'chr1': 248956422, ...}
+    print(bam.references())      # ['chr1', 'chr2', ...]
+
+    for read in bam.fetch(region="chr1:1000000-1001000"):
+        print(read.query_name, read.reference_start, read.cigarstring)
+
+    table = bam.to_arrow(columns=["qname", "rname", "pos", "mapq"], region="chr1:1-1000000")
+    df = bm.to_polars(table)     # requires polars
+```
+
+See `examples/read_bam.py` for a command-line demo.
 
 ## Quick Vision for the API
 
 ```python
 import bamboo as bm
-import polars as pl
 
-# Open a BAM (local or s3://...)
-with bm.AlignmentFile("s3://my-bucket/aligned.bam") as bam:
-    # Iterate like pysam, but better
-    for read in bam.fetch("chr1", 1000, 2000):
+# Open a BAM (local today; s3:// planned)
+with bm.AlignmentFile("aligned.bam") as bam:
+    for read in bam.fetch(region="chr1:1000-2000"):
         print(read.query_name, read.reference_start)
 
-    # Or get a proper DataFrame directly
-    df = bam.to_arrow().to_polars()   # or similar
-    # tags become real columns, sequences as large_string, etc.
+    df = bm.to_polars(bam.to_arrow())
 
-# Same for VCF
-with bm.VariantFile("cohort.vcf.gz") as vcf:
-    variants = vcf.to_polars()
+# VCF support is planned
+# with bm.VariantFile("cohort.vcf.gz") as vcf:
+#     variants = vcf.to_polars()
 ```
 
 The exact API will be refined with user feedback. The north star is: "it should feel like it was designed in 2025 for people who live in Polars/Jupyter/cloud environments", not "a thin wrapper over C structs".

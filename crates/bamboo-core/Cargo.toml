@@ -1,0 +1,11 @@
+[package]
+name = "bamboo-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core types, schema, and query options for Bamboo"
+authors.workspace = true
+
+[dependencies]
+thiserror = "2"
