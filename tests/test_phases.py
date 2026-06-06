@@ -15,6 +15,14 @@ def test_phase1_bam_read_write_api() -> None:
     assert hasattr(bamboo, "read_bam_table")
 
 
+@pytest.fixture(scope="session")
+def tiny_vcf_path() -> Path:
+    path = Path(__file__).resolve().parent / "data" / "tiny.vcf"
+    if not path.exists():
+        pytest.skip("missing tests/data/tiny.vcf")
+    return path
+
+
 def test_phase2_indexed_region_columnar(tiny_bam_with_index: Path) -> None:
     pa = pytest.importorskip("pyarrow")
 
@@ -32,6 +40,14 @@ def test_phase2_packaging_metadata() -> None:
     text = pyproject.read_text()
     assert 'name = "bamboo"' in text
     assert "pyarrow" in text
+
+
+def test_phase3_vcf_reader(tiny_vcf_path: Path) -> None:
+    pa = pytest.importorskip("pyarrow")
+
+    table = bamboo.read_vcf_table(str(tiny_vcf_path), columns=["chrom", "pos", "ref", "alt"])
+    assert isinstance(table, pa.Table)
+    assert table.num_rows == 2
 
 
 def test_phase3_htslib_stub_present() -> None:

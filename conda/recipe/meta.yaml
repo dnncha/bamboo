@@ -1,0 +1,49 @@
+{% set name = "bamboo" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  path: ../..
+
+build:
+  number: 0
+  script:
+    - cargo-bundle-licenses --format yaml --output THIRDPARTY.yml || true
+    - maturin build --release --strip -o dist
+    - pip install dist/*.whl --no-deps -vv
+  missing_dso_whitelist:
+    - "**/*.so"
+
+requirements:
+  build:
+    - {{ compiler('rust') }}
+    - {{ compiler('c') }}
+    - maturin >=1.5,<2
+    - cargo-bundle-licenses
+    - pkg-config
+  host:
+    - python
+    - pip
+    - pyarrow >=16
+  run:
+    - python
+    - pyarrow >=16
+
+test:
+  imports:
+    - bamboo
+  commands:
+    - python -c "import bamboo; print(bamboo.__version__)"
+
+about:
+  home: https://github.com/donncha/bamboo
+  license: MIT
+  license_file: LICENSE
+  summary: High-performance Python library for HTS data (BAM, VCF, CRAM)
+
+extra:
+  recipe-maintainers:
+    - donncha

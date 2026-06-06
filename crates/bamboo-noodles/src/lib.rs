@@ -9,6 +9,7 @@ mod reader;
 mod record;
 mod scan;
 mod stream;
+mod vcf;
 mod writer;
 
 pub use error::NoodlesError;
@@ -17,4 +18,5 @@ pub use reader::BamReader;
 pub use stream::BamRecordStream;
 pub use record::AlignedRecord;
 pub use scan::{scan_bam, scan_reader};
+pub use vcf::{scan_vcf, VcfReader};
 pub use writer::BamWriter;

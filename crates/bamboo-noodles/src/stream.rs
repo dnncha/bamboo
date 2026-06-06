@@ -24,8 +24,10 @@ enum StreamInner {
     RemoteFetch(RemoteFetch),
 }
 
+type LocalBgzfReader = bgzf::MultithreadedReader<BufReader<File>>;
+
 struct LocalScan {
-    reader: bam::io::Reader<bgzf::Reader<File>>,
+    reader: bam::io::Reader<LocalBgzfReader>,
     header: Header,
     options: BamScanOptions,
     record: bam::Record,
@@ -60,9 +62,7 @@ impl BamRecordStream {
     fn open_scan(source: &BamSource, header: &Header, options: BamScanOptions) -> Result<Self, NoodlesError> {
         match &source.storage {
             BamStorage::Local(path) => {
-                let mut reader = bam::io::reader::Builder::default()
-                    .build_from_path(path)
-                    .map_err(NoodlesError::from)?;
+                let mut reader = open_local_scan_reader(path)?;
                 reader.read_header().map_err(NoodlesError::from)?;
                 Ok(Self {
                     inner: StreamInner::LocalScan(LocalScan {
@@ -159,7 +159,7 @@ impl Iterator for BamRecordStream {
 }
 
 fn next_from_bam_reader<R: std::io::Read>(
-    reader: &mut bam::io::Reader<bgzf::Reader<R>>,
+    reader: &mut bam::io::Reader<R>,
     header: &Header,
     options: &BamScanOptions,
     record: &mut bam::Record,
@@ -210,12 +210,16 @@ pub fn count_records(source: &BamSource, _header: &Header) -> Result<usize, Nood
 }
 
 fn count_local_path(path: &Path) -> Result<usize, NoodlesError> {
+    let mut reader = open_local_scan_reader(path)?;
+    reader.read_header().map_err(NoodlesError::from)?;
+    count_reader_records(&mut reader)
+}
+
+fn open_local_scan_reader(path: &Path) -> Result<bam::io::Reader<LocalBgzfReader>, NoodlesError> {
     let workers = std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN);
     let file = File::open(path).map_err(NoodlesError::from)?;
     let decoder = bgzf::MultithreadedReader::with_worker_count(workers, BufReader::new(file));
-    let mut reader = bam::io::Reader::from(decoder);
-    reader.read_header().map_err(NoodlesError::from)?;
-    count_reader_records(&mut reader)
+    Ok(bam::io::Reader::from(decoder))
 }
 
 fn count_remote_bytes(data: &std::sync::Arc<[u8]>) -> Result<usize, NoodlesError> {

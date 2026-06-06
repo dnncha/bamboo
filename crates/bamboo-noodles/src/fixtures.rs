@@ -85,6 +85,29 @@ pub fn tiny_bam_path(dir: &Path) -> PathBuf {
     dir.join("tiny.bam")
 }
 
+/// Build a tiny plain VCF payload used in tests.
+pub fn tiny_vcf_bytes() -> io::Result<Vec<u8>> {
+    Ok(
+        b"##fileformat=VCFv4.2\n\
+##contig=<ID=chr1,length=1000>\n\
+##contig=<ID=chr2,length=1000>\n\
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+chr1\t100\t.\tA\tG\t60\tPASS\t.\n\
+chr2\t250\trs1\tC\tT\t30\tPASS\tAF=0.5\n"
+            .to_vec(),
+    )
+}
+
+/// Write the tiny VCF fixture to `path`.
+pub fn write_tiny_vcf(path: &Path) -> io::Result<()> {
+    std::fs::write(path, tiny_vcf_bytes()?)
+}
+
+/// Convenience path helper for temp directories.
+pub fn tiny_vcf_path(dir: &Path) -> PathBuf {
+    dir.join("tiny.vcf")
+}
+
 const BENCH_REFERENCES: [(&str, usize); 5] = [
     ("chr1", 250_000_000),
     ("chr2", 242_193_529),

@@ -1,6 +1,6 @@
 //! Generate committed test fixtures under `tests/data/`.
 
-use bamboo_noodles::fixtures::{write_tiny_bam, write_tiny_bam_index};
+use bamboo_noodles::fixtures::{write_tiny_bam, write_tiny_bam_index, write_tiny_vcf};
 use std::env;
 use std::path::PathBuf;
 
@@ -16,6 +16,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     write_tiny_bam(&bam_path)?;
     write_tiny_bam_index(&bam_path)?;
 
-    println!("Wrote {} and {}", bam_path.display(), bam_path.with_extension("bam.bai").display());
+    let vcf_path = root.join("tiny.vcf");
+    write_tiny_vcf(&vcf_path)?;
+
+    println!(
+        "Wrote {}, {}, and {}",
+        bam_path.display(),
+        bam_path.with_extension("bam.bai").display(),
+        vcf_path.display()
+    );
     Ok(())
 }

@@ -1,8 +1,11 @@
 mod alignment;
 mod errors;
 mod table;
+mod variant;
+mod vcf_table;
 
 use alignment::{PyAlignedSegment, PyAlignmentFile, PyAlignmentIterator};
+use variant::{PyVariantFile, PyVariantRecord};
 use bamboo_core::{BamColumn, BamScanOptions, FetchRegion};
 use bamboo_noodles::scan_bam;
 use pyo3::exceptions::PyValueError;
@@ -19,7 +22,21 @@ fn _bamboo(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_bam_table, m)?)?;
     m.add_function(wrap_pyfunction!(scan_bam_table, m)?)?;
     m.add_function(wrap_pyfunction!(read_columns, m)?)?;
+    m.add_class::<PyVariantFile>()?;
+    m.add_class::<PyVariantRecord>()?;
+    m.add_function(wrap_pyfunction!(read_vcf_table, m)?)?;
     Ok(())
+}
+
+#[pyfunction]
+#[pyo3(signature = (path, *, columns=None, region=None))]
+fn read_vcf_table(
+    py: Python<'_>,
+    path: String,
+    columns: Option<Vec<String>>,
+    region: Option<String>,
+) -> PyResult<PyObject> {
+    variant::read_vcf_table_impl(py, path, columns, region)
 }
 
 #[pyfunction]

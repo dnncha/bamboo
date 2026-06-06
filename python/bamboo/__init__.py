@@ -14,9 +14,12 @@ try:
         AlignedSegment,
         AlignmentFile,
         AlignmentIterator,
+        VariantFile,
+        VariantRecord,
         __version__ as _rust_version,
         read_bam_table,
         read_columns,
+        read_vcf_table,
         scan_bam_table,
     )
     from bamboo import compat
@@ -25,8 +28,11 @@ except ImportError:
     AlignedSegment = None  # type: ignore[assignment,misc]
     AlignmentFile = None  # type: ignore[assignment,misc]
     AlignmentIterator = None  # type: ignore[assignment,misc]
+    VariantFile = None  # type: ignore[assignment,misc]
+    VariantRecord = None  # type: ignore[assignment,misc]
     read_bam_table = None  # type: ignore[assignment,misc]
     read_columns = None  # type: ignore[assignment,misc]
+    read_vcf_table = None  # type: ignore[assignment,misc]
     scan_bam_table = None  # type: ignore[assignment,misc]
     compat = None  # type: ignore[assignment,misc]
     to_polars = None  # type: ignore[assignment,misc]
@@ -40,9 +46,12 @@ __all__ = [
     "AlignedSegment",
     "AlignmentFile",
     "AlignmentIterator",
+    "VariantFile",
+    "VariantRecord",
     "compat",
     "read_bam_table",
     "read_columns",
+    "read_vcf_table",
     "scan_bam_table",
     "to_polars",
 ]

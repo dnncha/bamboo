@@ -6,6 +6,14 @@ import bamboo
 
 
 def test_public_api_exports() -> None:
+    import bamboo as bm
+
+    assert bm.AlignmentFile is not None
+    assert bm.VariantFile is not None
+    assert bm.read_vcf_table is not None
+
+
+def test_public_api_exports_bam() -> None:
     assert bamboo.__version__ == "0.1.0"
     assert bamboo.AlignmentFile is not None
     assert bamboo.AlignedSegment is not None
