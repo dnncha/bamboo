@@ -1,11 +1,11 @@
 use crate::error::NoodlesError;
 use crate::record::AlignedRecord;
+use crate::stream::{BamRecordStream, count_records};
 use bamboo_core::{BamScanOptions, FetchRegion};
 use bamboo_io::BamSource;
 use noodles::bam as bam;
 use noodles::bgzf as bgzf;
 use noodles::sam::Header;
-use noodles::sam::alignment::RecordBuf;
 use std::io::Cursor;
 
 /// High-level BAM reader backed by noodles.
@@ -18,12 +18,16 @@ impl BamReader {
     /// Open a BAM from a local path or cloud URI (`s3://`, `gs://`, `https://`, `file://`).
     pub fn open(uri: &str) -> Result<Self, NoodlesError> {
         let source = bamboo_io::open_bam(uri).map_err(NoodlesError::from)?;
-        let header = read_header(&source.data)?;
+        let header = read_header(&source)?;
         Ok(Self { source, header })
     }
 
     pub fn uri(&self) -> &str {
         &self.source.uri
+    }
+
+    pub fn source(&self) -> &BamSource {
+        &self.source
     }
 
     pub fn header(&self) -> &Header {
@@ -47,89 +51,33 @@ impl BamReader {
     }
 
     pub fn has_index(&self) -> bool {
-        bamboo_io::has_index(&self.source.uri, &self.source.index_data)
+        bamboo_io::has_index(&self.source)
     }
 
     pub fn count_records(&self) -> Result<usize, NoodlesError> {
-        let mut reader = open_plain_reader(&self.source.data)?;
-        let _ = reader.read_header().map_err(NoodlesError::from)?;
-        Ok(reader.record_bufs(&self.header).count())
+        count_records(&self.source, &self.header)
+    }
+
+    pub fn open_stream(&self, options: BamScanOptions) -> Result<BamRecordStream, NoodlesError> {
+        BamRecordStream::open(&self.source, &self.header, options)
     }
 
     pub fn iter_records(&self, options: &BamScanOptions) -> Result<Vec<AlignedRecord>, NoodlesError> {
-        if options.region.is_some() && self.has_index() {
-            self.fetch_records(options)
-        } else {
-            self.scan_records(options)
-        }
+        self.open_stream(options.clone())?
+            .collect::<Result<Vec<_>, _>>()
     }
 
     pub fn scan_records(&self, options: &BamScanOptions) -> Result<Vec<AlignedRecord>, NoodlesError> {
-        let mut reader = open_plain_reader(&self.source.data)?;
-        let _ = reader.read_header().map_err(NoodlesError::from)?;
-        let mut records = Vec::new();
-
-        for result in reader.record_bufs(&self.header) {
-            let record = result?;
-            let aligned = AlignedRecord::from_record_buf(&self.header, record, &options.tags);
-            if aligned.passes_filters(options) {
-                records.push(aligned);
-            }
-        }
-
-        Ok(records)
+        self.iter_records(options)
     }
 
     pub fn fetch_records(&self, options: &BamScanOptions) -> Result<Vec<AlignedRecord>, NoodlesError> {
-        let region = options
-            .region
-            .as_ref()
-            .ok_or_else(|| NoodlesError::Message("fetch requires a region".to_string()))?;
-
-        let index_data = self
-            .source
-            .index_data
-            .as_ref()
-            .ok_or_else(|| NoodlesError::MissingIndex {
-                path: self
-                    .source
-                    .index_uri
-                    .clone()
-                    .unwrap_or_else(|| bamboo_io::index_uri_candidates(&self.source.uri).join(", ")),
-            })?;
-
-        let mut index_reader = bam::bai::io::Reader::new(index_data.as_slice());
-        let index = index_reader.read_index().map_err(NoodlesError::from)?;
-
-        let mut reader = bam::io::indexed_reader::Builder::default()
-            .set_index(index)
-            .build_from_reader(Cursor::new(self.source.data.as_slice()))
-            .map_err(NoodlesError::from)?;
-
-        let header = reader.read_header().map_err(NoodlesError::from)?;
-        let samtools_region = region.to_samtools_region();
-        let parsed_region: noodles::core::Region = samtools_region
-            .parse()
-            .map_err(|err: noodles::core::region::ParseError| {
-                NoodlesError::Message(err.to_string())
-            })?;
-
-        let query = reader
-            .query(&header, &parsed_region)
-            .map_err(NoodlesError::from)?;
-
-        let mut records = Vec::new();
-        for result in query {
-            let record = result.map_err(NoodlesError::from)?;
-            let record_buf =
-                RecordBuf::try_from_alignment_record(&header, &record).map_err(NoodlesError::from)?;
-            let aligned = AlignedRecord::from_record_buf(&header, record_buf, &options.tags);
-            if aligned.passes_filters(options) {
-                records.push(aligned);
-            }
+        if !self.has_index() {
+            return Err(NoodlesError::MissingIndex {
+                path: bamboo_io::index_uri_candidates(&self.source.uri).join(", "),
+            });
         }
-
-        Ok(records)
+        self.iter_records(options)
     }
 
     pub fn fetch_region(
@@ -146,13 +94,25 @@ impl BamReader {
     }
 }
 
-fn read_header(data: &[u8]) -> Result<Header, NoodlesError> {
-    let mut reader = open_plain_reader(data)?;
-    reader.read_header().map_err(NoodlesError::from)
+fn read_header(source: &BamSource) -> Result<Header, NoodlesError> {
+    match &source.storage {
+        bamboo_io::BamStorage::Local(path) => {
+            let mut reader = bam::io::reader::Builder::default()
+                .build_from_path(path)
+                .map_err(NoodlesError::from)?;
+            reader.read_header().map_err(NoodlesError::from)
+        }
+        bamboo_io::BamStorage::Remote { data, .. } => {
+            let mut reader = open_plain_reader(data)?;
+            reader.read_header().map_err(NoodlesError::from)
+        }
+    }
 }
 
-fn open_plain_reader(data: &[u8]) -> Result<bam::io::Reader<bgzf::Reader<&[u8]>>, NoodlesError> {
-    Ok(bam::io::Reader::new(data))
+fn open_plain_reader(
+    data: &std::sync::Arc<[u8]>,
+) -> Result<bam::io::Reader<bgzf::Reader<Cursor<std::sync::Arc<[u8]>>>>, NoodlesError> {
+    Ok(bam::io::Reader::new(Cursor::new(data.clone())))
 }
 
 #[cfg(test)]

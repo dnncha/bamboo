@@ -8,13 +8,48 @@ mod runtime;
 
 pub use error::IoError;
 
+/// How a BAM is accessed by Bamboo readers.
+#[derive(Debug, Clone)]
+pub enum BamStorage {
+    /// Stream from a local filesystem path (no full-file buffering on open).
+    Local(std::path::PathBuf),
+    /// Fully buffered object for remote URIs.
+    Remote {
+        uri: String,
+        data: std::sync::Arc<[u8]>,
+        index_data: Option<std::sync::Arc<[u8]>>,
+        index_uri: Option<String>,
+    },
+}
+
 /// A resolved BAM object and optional sidecar index bytes.
 #[derive(Debug, Clone)]
 pub struct BamSource {
     pub uri: String,
-    pub data: Vec<u8>,
-    pub index_data: Option<Vec<u8>>,
-    pub index_uri: Option<String>,
+    pub storage: BamStorage,
+}
+
+impl BamSource {
+    pub fn local_path(&self) -> Option<&std::path::Path> {
+        match &self.storage {
+            BamStorage::Local(path) => Some(path),
+            BamStorage::Remote { .. } => None,
+        }
+    }
+
+    pub fn remote_data(&self) -> Option<&[u8]> {
+        match &self.storage {
+            BamStorage::Local(_) => None,
+            BamStorage::Remote { data, .. } => Some(data),
+        }
+    }
+
+    pub fn remote_index_data(&self) -> Option<&[u8]> {
+        match &self.storage {
+            BamStorage::Local(_) => None,
+            BamStorage::Remote { index_data, .. } => index_data.as_deref(),
+        }
+    }
 }
 
 /// Return candidate index URIs for a BAM location.
@@ -40,14 +75,24 @@ pub fn index_uri_candidates(bam_uri: &str) -> Vec<String> {
 
 /// Read a BAM (and optional `.bai`) from a local path or cloud URI.
 pub fn open_bam(uri: &str) -> Result<BamSource, IoError> {
+    if let Some(path) = local_path(uri) {
+        return Ok(BamSource {
+            uri: uri.to_string(),
+            storage: BamStorage::Local(path),
+        });
+    }
+
     let data = read_bytes(uri)?;
     let (index_data, index_uri) = load_first_available_index(uri)?;
 
     Ok(BamSource {
         uri: uri.to_string(),
-        data,
-        index_data,
-        index_uri,
+        storage: BamStorage::Remote {
+            uri: uri.to_string(),
+            data: std::sync::Arc::from(data),
+            index_data: index_data.map(std::sync::Arc::from),
+            index_uri,
+        },
     })
 }
 
@@ -61,8 +106,13 @@ pub fn read_bytes(uri: &str) -> Result<Vec<u8>, IoError> {
 }
 
 /// Return true when an index appears to exist for `bam_uri`.
-pub fn has_index(bam_uri: &str, index_data: &Option<Vec<u8>>) -> bool {
-    index_data.is_some() || index_uri_candidates(bam_uri).iter().any(|candidate| {
+pub fn has_index(source: &BamSource) -> bool {
+    if let Some(index_data) = source.remote_index_data() {
+        return !index_data.is_empty();
+    }
+
+    let bam_uri = &source.uri;
+    index_uri_candidates(bam_uri).iter().any(|candidate| {
         if looks_like_uri(candidate) {
             object_exists(candidate).unwrap_or(false)
         } else {
@@ -132,6 +182,16 @@ fn looks_like_uri(value: &str) -> bool {
     value.contains("://")
 }
 
+fn local_path(uri: &str) -> Option<std::path::PathBuf> {
+    if looks_like_uri(uri) {
+        if let Some(rest) = uri.strip_prefix("file://") {
+            return Some(std::path::PathBuf::from(rest));
+        }
+        return None;
+    }
+    Some(std::path::PathBuf::from(uri))
+}
+
 fn replace_suffix(value: &str, from: &str, to: &str) -> String {
     if let Some(prefix) = value.strip_suffix(from) {
         format!("{prefix}{to}")
@@ -166,7 +226,7 @@ mod tests {
 
         let uri = format!("file://{}", path.display());
         let source = open_bam(&uri).expect("open file:// bam");
-        assert!(!source.data.is_empty());
+        assert!(source.local_path().is_some());
         assert_eq!(source.uri, uri);
     }
 }

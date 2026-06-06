@@ -1,7 +1,7 @@
 use crate::errors;
 use crate::{build_scan_options, table::table_to_pyarrow};
 use bamboo_core::{BamScanOptions, FetchRegion};
-use bamboo_noodles::{scan_bam, AlignedRecord, BamReader, BamWriter};
+use bamboo_noodles::{scan_reader, AlignedRecord, BamReader, BamRecordStream, BamWriter};
 use pyo3::exceptions::{PyStopIteration, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -76,8 +76,7 @@ impl PyAlignedSegment {
 
 #[pyclass(name = "AlignmentIterator")]
 pub struct PyAlignmentIterator {
-    records: Vec<AlignedRecord>,
-    index: usize,
+    stream: BamRecordStream,
 }
 
 #[pymethods]
@@ -87,12 +86,11 @@ impl PyAlignmentIterator {
     }
 
     fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<PyAlignedSegment>> {
-        if slf.index >= slf.records.len() {
-            return Err(PyStopIteration::new_err(()));
+        match slf.stream.next() {
+            Some(Ok(record)) => Ok(Some(PyAlignedSegment { inner: record })),
+            Some(Err(err)) => Err(errors::noodles_to_py_err(err)),
+            None => Err(PyStopIteration::new_err(())),
         }
-        let record = slf.records[slf.index].clone();
-        slf.index += 1;
-        Ok(Some(PyAlignedSegment { inner: record }))
     }
 }
 
@@ -185,16 +183,14 @@ impl PyAlignmentFile {
             None
         };
 
-        let options = BamScanOptions {
-            region: fetch_region,
-            min_mapq,
-            ..BamScanOptions::default()
-        };
+        let mut options = BamScanOptions::iteration_defaults();
+        options.region = fetch_region;
+        options.min_mapq = min_mapq;
 
-        let records = reader
-            .iter_records(&options)
+        let stream = reader
+            .open_stream(options)
             .map_err(errors::noodles_to_py_err)?;
-        Ok(PyAlignmentIterator { records, index: 0 })
+        Ok(PyAlignmentIterator { stream })
     }
 
     fn write(&mut self, record: &PyAlignedSegment) -> PyResult<()> {
@@ -265,16 +261,17 @@ impl PyAlignmentFile {
         min_mapq: Option<u8>,
         reference_name: Option<String>,
     ) -> PyResult<PyObject> {
-        let uri = match &self.inner {
-            AlignmentFileInner::Read(reader) => reader.uri().to_string(),
+        let options = build_scan_options(columns, tags, region, min_mapq, reference_name)?;
+        let table = match &self.inner {
+            AlignmentFileInner::Read(reader) => {
+                scan_reader(reader, options).map_err(errors::noodles_to_py_err)?
+            }
             AlignmentFileInner::Write(_) => {
                 return Err(PyValueError::new_err(
                     "to_arrow() requires a read-mode AlignmentFile",
                 ));
             }
         };
-        let options = build_scan_options(columns, tags, region, min_mapq, reference_name)?;
-        let table = scan_bam(&uri, options).map_err(errors::noodles_to_py_err)?;
         table_to_pyarrow(py, &table)
     }
 

@@ -1,7 +1,9 @@
 use crate::error::NoodlesError;
 use bamboo_core::{BamColumn, BamScanOptions, BamTable, TagValue};
+use noodles::bam as bam;
 use noodles::sam::Header;
 use noodles::sam::alignment::RecordBuf;
+
 use noodles::sam::alignment::record::Flags;
 use noodles::sam::alignment::record::MappingQuality;
 use noodles::sam::alignment::record::cigar::Op;
@@ -31,46 +33,186 @@ pub struct AlignedRecord {
 }
 
 impl AlignedRecord {
-    pub fn from_record_buf(header: &Header, record: RecordBuf, tag_names: &[String]) -> Self {
-        let reference_name = record
-            .reference_sequence_id()
-            .and_then(|id| header.reference_sequences().get_index(id))
-            .map(|(name, _)| name.to_string());
+    pub fn from_record_buf(header: &Header, record: &RecordBuf, options: &BamScanOptions) -> Self {
+        let needs = FieldNeeds::from_options(options);
 
-        let mate_reference_name = record
-            .mate_reference_sequence_id()
-            .and_then(|id| header.reference_sequences().get_index(id))
-            .map(|(name, _)| name.to_string());
+        let reference_name = if needs.reference_name {
+            record
+                .reference_sequence_id()
+                .and_then(|id| header.reference_sequences().get_index(id))
+                .map(|(name, _)| name.to_string())
+        } else {
+            None
+        };
 
-        let tags = tag_names
-            .iter()
-            .map(|name| {
-                let value = record
-                    .data()
-                    .get(&Tag::from([name.as_bytes()[0], name.as_bytes()[1]]))
-                    .map(convert_tag_value)
-                    .unwrap_or(TagValue::Missing);
-                (name.clone(), value)
-            })
-            .collect();
+        let mate_reference_name = if needs.mate_reference_name {
+            record
+                .mate_reference_sequence_id()
+                .and_then(|id| header.reference_sequences().get_index(id))
+                .map(|(name, _)| name.to_string())
+        } else {
+            None
+        };
+
+        let tags = if needs.tags {
+            options
+                .tags
+                .iter()
+                .map(|name| {
+                    let value = record
+                        .data()
+                        .get(&Tag::from([name.as_bytes()[0], name.as_bytes()[1]]))
+                        .map(convert_tag_value)
+                        .unwrap_or(TagValue::Missing);
+                    (name.clone(), value)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         Self {
-            query_name: record.name().map(|name| name.to_string()),
-            flag: record.flags().bits(),
+            query_name: if needs.query_name {
+                record.name().map(|name| name.to_string())
+            } else {
+                None
+            },
+            flag: if needs.flag {
+                record.flags().bits()
+            } else {
+                0
+            },
             reference_name,
-            reference_start: record
-                .alignment_start()
-                .map(|position| position.get() as i64 - 1),
-            mapping_quality: record.mapping_quality().map(|quality| quality.get()),
-            cigar: cigar_to_string(record.cigar()),
+            reference_start: if needs.reference_start {
+                record
+                    .alignment_start()
+                    .map(|position| position.get() as i64 - 1)
+            } else {
+                None
+            },
+            mapping_quality: if needs.mapping_quality {
+                record.mapping_quality().map(|quality| quality.get())
+            } else {
+                None
+            },
+            cigar: if needs.cigar {
+                cigar_to_string(record.cigar())
+            } else {
+                String::new()
+            },
             mate_reference_name,
-            mate_reference_start: record
-                .mate_alignment_start()
-                .map(|position| position.get() as i64 - 1),
-            template_length: Some(record.template_length()),
-            query_sequence: bytes_to_optional_string(record.sequence().as_ref()),
-            query_qualities: bytes_to_optional_string(record.quality_scores().as_ref()),
+            mate_reference_start: if needs.mate_reference_start {
+                record
+                    .mate_alignment_start()
+                    .map(|position| position.get() as i64 - 1)
+            } else {
+                None
+            },
+            template_length: if needs.template_length {
+                Some(record.template_length())
+            } else {
+                None
+            },
+            query_sequence: if needs.query_sequence {
+                bytes_to_optional_string(record.sequence().as_ref())
+            } else {
+                None
+            },
+            query_qualities: if needs.query_qualities {
+                bytes_to_optional_string(record.quality_scores().as_ref())
+            } else {
+                None
+            },
             tags,
+        }
+    }
+
+    pub fn from_bam_record(header: &Header, record: &bam::Record, options: &BamScanOptions) -> Self {
+        let needs = FieldNeeds::from_options(options);
+
+        let reference_name = if needs.reference_name {
+            record
+                .reference_sequence_id()
+                .transpose()
+                .ok()
+                .flatten()
+                .and_then(|id| header.reference_sequences().get_index(id))
+                .map(|(name, _)| name.to_string())
+        } else {
+            None
+        };
+
+        let mate_reference_name = if needs.mate_reference_name {
+            record
+                .mate_reference_sequence_id()
+                .transpose()
+                .ok()
+                .flatten()
+                .and_then(|id| header.reference_sequences().get_index(id))
+                .map(|(name, _)| name.to_string())
+        } else {
+            None
+        };
+
+        Self {
+            query_name: if needs.query_name {
+                record.name().map(|name| name.to_string())
+            } else {
+                None
+            },
+            flag: if needs.flag {
+                record.flags().bits()
+            } else {
+                0
+            },
+            reference_name,
+            reference_start: if needs.reference_start {
+                record
+                    .alignment_start()
+                    .transpose()
+                    .ok()
+                    .flatten()
+                    .map(|position| position.get() as i64 - 1)
+            } else {
+                None
+            },
+            mapping_quality: if needs.mapping_quality {
+                record.mapping_quality().map(|quality| quality.get())
+            } else {
+                None
+            },
+            cigar: if needs.cigar {
+                bam_cigar_to_string(record.cigar())
+            } else {
+                String::new()
+            },
+            mate_reference_name,
+            mate_reference_start: if needs.mate_reference_start {
+                record
+                    .mate_alignment_start()
+                    .transpose()
+                    .ok()
+                    .flatten()
+                    .map(|position| position.get() as i64 - 1)
+            } else {
+                None
+            },
+            template_length: if needs.template_length {
+                Some(record.template_length())
+            } else {
+                None
+            },
+            query_sequence: if needs.query_sequence {
+                bam_sequence_to_optional_string(record.sequence())
+            } else {
+                None
+            },
+            query_qualities: if needs.query_qualities {
+                bam_quality_to_optional_string(record.quality_scores())
+            } else {
+                None
+            },
+            tags: Vec::new(),
         }
     }
 
@@ -220,6 +362,68 @@ impl AlignedRecord {
             table.tags[index].values.push(value);
         }
     }
+}
+
+struct FieldNeeds {
+    query_name: bool,
+    flag: bool,
+    reference_name: bool,
+    reference_start: bool,
+    mapping_quality: bool,
+    cigar: bool,
+    mate_reference_name: bool,
+    mate_reference_start: bool,
+    template_length: bool,
+    query_sequence: bool,
+    query_qualities: bool,
+    tags: bool,
+}
+
+impl FieldNeeds {
+    fn from_options(options: &BamScanOptions) -> Self {
+        let filter_needs_reference = options.region.is_some() || options.reference_name.is_some();
+        let filter_needs_mapq = options.min_mapq.is_some();
+        let filter_needs_position = options.region.is_some();
+
+        Self {
+            query_name: options.wants_column(BamColumn::QueryName),
+            flag: options.wants_column(BamColumn::Flag),
+            reference_name: options.wants_column(BamColumn::ReferenceName) || filter_needs_reference,
+            reference_start: options.wants_column(BamColumn::Position) || filter_needs_position,
+            mapping_quality: options.wants_column(BamColumn::MappingQuality) || filter_needs_mapq,
+            cigar: options.wants_column(BamColumn::Cigar),
+            mate_reference_name: options.wants_column(BamColumn::MateReferenceName),
+            mate_reference_start: options.wants_column(BamColumn::MatePosition),
+            template_length: options.wants_column(BamColumn::TemplateLength),
+            query_sequence: options.wants_column(BamColumn::Sequence),
+            query_qualities: options.wants_column(BamColumn::Quality),
+            tags: !options.tags.is_empty(),
+        }
+    }
+}
+
+fn bam_sequence_to_optional_string(sequence: bam::record::Sequence<'_>) -> Option<String> {
+    if sequence.is_empty() {
+        None
+    } else {
+        Some(sequence.iter().map(|base| base as char).collect())
+    }
+}
+
+fn bam_quality_to_optional_string(qualities: bam::record::QualityScores<'_>) -> Option<String> {
+    if qualities.is_empty() {
+        None
+    } else {
+        Some(String::from_utf8_lossy(qualities.as_ref()).into_owned())
+    }
+}
+
+fn bam_cigar_to_string(cigar: bam::record::Cigar<'_>) -> String {
+    cigar
+        .iter()
+        .filter_map(Result::ok)
+        .map(|op| format!("{}{}", op.len(), kind_to_char(op.kind())))
+        .collect()
 }
 
 fn cigar_to_string(cigar: &noodles::sam::alignment::record_buf::Cigar) -> String {

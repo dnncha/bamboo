@@ -58,7 +58,27 @@ impl Default for BamScanOptions {
     }
 }
 
+/// Default columns for lightweight iteration / fetch in Python bindings.
+pub const ITERATION_BAM_COLUMNS: [BamColumn; 6] = [
+    BamColumn::QueryName,
+    BamColumn::Flag,
+    BamColumn::ReferenceName,
+    BamColumn::Position,
+    BamColumn::MappingQuality,
+    BamColumn::Cigar,
+];
+
 impl BamScanOptions {
+    pub fn iteration_defaults() -> Self {
+        Self {
+            columns: ITERATION_BAM_COLUMNS.to_vec(),
+            tags: Vec::new(),
+            region: None,
+            min_mapq: None,
+            reference_name: None,
+        }
+    }
+
     pub fn wants_column(&self, column: BamColumn) -> bool {
         self.columns.iter().any(|c| *c == column)
     }

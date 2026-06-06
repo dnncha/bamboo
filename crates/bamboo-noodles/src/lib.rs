@@ -6,11 +6,13 @@ mod header_util;
 mod reader;
 mod record;
 mod scan;
+mod stream;
 mod writer;
 
 pub use error::NoodlesError;
 pub use header_util::header_from_references;
 pub use reader::BamReader;
+pub use stream::BamRecordStream;
 pub use record::AlignedRecord;
-pub use scan::scan_bam;
+pub use scan::{scan_bam, scan_reader};
 pub use writer::BamWriter;
