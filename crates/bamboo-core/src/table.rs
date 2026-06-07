@@ -76,7 +76,26 @@ impl BamTable {
     }
 
     pub fn len(&self) -> usize {
-        self.flag.len()
+        let mut rows = 0usize;
+        for column in &self.columns {
+            rows = rows.max(match column {
+                BamColumn::QueryName => self.qname.len(),
+                BamColumn::Flag => self.flag.len(),
+                BamColumn::ReferenceName => self.rname.len(),
+                BamColumn::Position => self.pos.len(),
+                BamColumn::MappingQuality => self.mapq.len(),
+                BamColumn::Cigar => self.cigar.len(),
+                BamColumn::MateReferenceName => self.rnext.len(),
+                BamColumn::MatePosition => self.pnext.len(),
+                BamColumn::TemplateLength => self.tlen.len(),
+                BamColumn::Sequence => self.seq.len(),
+                BamColumn::Quality => self.qual.len(),
+            });
+        }
+        for tag in &self.tags {
+            rows = rows.max(tag.values.len());
+        }
+        rows
     }
 
     pub fn is_empty(&self) -> bool {
@@ -93,5 +112,28 @@ impl BamTable {
             names.push(Box::leak(tag.name.clone().into_boxed_str()));
         }
         names
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::options::BamColumn;
+
+    #[test]
+    fn len_counts_selected_columns_without_flag() {
+        let mut table = BamTable::new(
+            vec![
+                BamColumn::QueryName,
+                BamColumn::ReferenceName,
+                BamColumn::Position,
+            ],
+            Vec::new(),
+        );
+        table.qname.push(Some("read1".to_string()));
+        table.rname.push(Some("chr1".to_string()));
+        table.pos.push(Some(99));
+
+        assert_eq!(table.len(), 1);
     }
 }

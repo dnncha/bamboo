@@ -127,7 +127,7 @@ impl CramReader {
     }
 }
 
-fn cram_index_path(path: &str) -> PathBuf {
+pub(crate) fn cram_index_path(path: &str) -> PathBuf {
     let mut name = PathBuf::from(path).into_os_string();
     name.push(".crai");
     PathBuf::from(name)
@@ -198,14 +198,14 @@ fn push_aligned_record(
     Ok(())
 }
 
-fn read_header_from_path(path: &str) -> Result<Header, NoodlesError> {
+pub(crate) fn read_header_from_path(path: &str) -> Result<Header, NoodlesError> {
     let mut reader = cram::io::reader::Builder::default()
         .build_from_path(Path::new(path))
         .map_err(NoodlesError::from)?;
     reader.read_header().map_err(NoodlesError::from)
 }
 
-fn reference_repository(
+pub(crate) fn reference_repository(
     header: &Header,
     reference_fasta: Option<&str>,
 ) -> Result<fasta::Repository, NoodlesError> {

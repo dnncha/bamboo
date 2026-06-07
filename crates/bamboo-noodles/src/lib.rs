@@ -4,6 +4,7 @@ pub mod fixtures;
 mod bcf;
 mod columnar;
 mod cram;
+mod cram_columnar;
 mod lazy_fetch;
 mod error;
 mod header_util;
