@@ -33,6 +33,14 @@ def _pysam_pileup(path: Path, contig: str, start: int, end: int) -> list[tuple[i
     return rows
 
 
+def test_pileup_reads_false_reports_depth_in_loop(tiny_bam_with_index: Path) -> None:
+    depths: list[int] = []
+    with bamboo.AlignmentFile(str(tiny_bam_with_index)) as bam:
+        for column in bam.pileup("chr1", 99, 101, reads=False):
+            depths.append(column.n)
+    assert depths == [1, 1, 1, 1, 1, 1]
+
+
 def test_pileup_matches_pysam_over_tiny_region(tiny_bam_with_index: Path) -> None:
     bamboo_rows = _bamboo_pileup(tiny_bam_with_index, "chr1", 99, 101)
     pysam_rows = _pysam_pileup(tiny_bam_with_index, "chr1", 99, 101)

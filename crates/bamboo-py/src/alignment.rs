@@ -393,6 +393,7 @@ impl PyAlignmentFile {
     #[pyo3(signature = (contig=None, start=0, stop=0x7fff_ffff, *, region=None, reads=true))]
     fn pileup(
         &self,
+        py: Python<'_>,
         contig: Option<String>,
         start: u32,
         stop: u32,
@@ -420,6 +421,7 @@ impl PyAlignmentFile {
         };
 
         pileup::pileup_region(
+            py,
             reader.uri(),
             &reference_name,
             region_start,

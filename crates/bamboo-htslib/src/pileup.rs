@@ -2,10 +2,10 @@
 
 use crate::HtslibError;
 use rust_htslib::bam::{self, pileup::Pileups, Read};
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct PileupColumn {
-    pub reference_name: String,
     pub reference_id: i32,
     pub position: u32,
     pub depth: u32,
@@ -27,8 +27,7 @@ pub struct PileupStream {
     #[allow(dead_code)]
     reader: Box<bam::IndexedReader>,
     pileups: Pileups<'static, bam::IndexedReader>,
-    target_names: Vec<String>,
-    contig: String,
+    target_names: Arc<Vec<String>>,
     materialize_reads: bool,
 }
 
@@ -48,12 +47,14 @@ impl PileupStream {
         reader.set_threads(4)?;
         reader.fetch((contig, start as i64, end as i64))?;
 
-        let target_names = reader
-            .header()
-            .target_names()
-            .iter()
-            .map(|name| String::from_utf8_lossy(name).into_owned())
-            .collect::<Vec<_>>();
+        let target_names = Arc::new(
+            reader
+                .header()
+                .target_names()
+                .iter()
+                .map(|name| String::from_utf8_lossy(name).into_owned())
+                .collect::<Vec<_>>(),
+        );
 
         let pileups = unsafe {
             let reader_ptr: *mut bam::IndexedReader = reader.as_mut();
@@ -67,37 +68,31 @@ impl PileupStream {
             reader,
             pileups,
             target_names,
-            contig: contig.to_string(),
             materialize_reads,
         })
     }
 
+    pub fn target_names(&self) -> Arc<Vec<String>> {
+        Arc::clone(&self.target_names)
+    }
+
+    pub fn materialize_reads(&self) -> bool {
+        self.materialize_reads
+    }
+
     pub fn next_column(&mut self) -> Option<Result<PileupColumn, HtslibError>> {
         match self.pileups.next() {
-            Some(Ok(pileup)) => Some(Ok(column_from_pileup(
-                &pileup,
-                &self.target_names,
-                &self.contig,
-                self.materialize_reads,
-            ))),
+            Some(Ok(pileup)) => Some(Ok(column_from_pileup(pileup, self.materialize_reads))),
             Some(Err(err)) => Some(Err(err.into())),
             None => None,
         }
     }
 }
 
-fn column_from_pileup(
-    pileup: &bam::pileup::Pileup,
-    target_names: &[String],
-    contig: &str,
-    materialize_reads: bool,
-) -> PileupColumn {
-    let tid = pileup.tid() as i32;
-    let reference_name = target_names
-        .get(tid as usize)
-        .cloned()
-        .unwrap_or_else(|| contig.to_string());
-
+fn column_from_pileup(pileup: bam::pileup::Pileup, materialize_reads: bool) -> PileupColumn {
+    let reference_id = pileup.tid() as i32;
+    let position = pileup.pos();
+    let depth = pileup.depth();
     let reads = if materialize_reads {
         pileup
             .alignments()
@@ -118,10 +113,9 @@ fn column_from_pileup(
     };
 
     PileupColumn {
-        reference_name,
-        reference_id: tid,
-        position: pileup.pos(),
-        depth: pileup.depth(),
+        reference_id,
+        position,
+        depth,
         reads,
     }
 }
