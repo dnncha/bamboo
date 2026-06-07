@@ -35,7 +35,7 @@ jobs:
         with:
           container: off
           target: ${{ matrix.target }}
-          args: --release --strip --features htslib --out dist -i python3.12 --compatibility manylinux_2_28
+          args: --release --strip --features htslib --out dist -i python3.12 --compatibility manylinux_2_34
           sccache: "true"
 
       - uses: actions/upload-artifact@v4
