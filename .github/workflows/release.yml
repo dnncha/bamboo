@@ -11,16 +11,17 @@ permissions:
 
 jobs:
   linux:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
-        target: [x86_64, aarch64]
+        include:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: ubuntu-24.04-arm
+            target: aarch64
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        if: matrix.target == 'aarch64'
-        uses: docker/setup-qemu-action@v3
 
       - uses: actions/setup-python@v5
         with:
@@ -42,6 +43,7 @@ jobs:
   macos:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         target: [aarch64, x86_64]
     steps:
@@ -63,8 +65,10 @@ jobs:
           name: wheels-macos-${{ matrix.target }}
           path: dist
 
+  # hts-sys runs version.sh at build time; not yet compatible with Windows CI.
   windows:
     runs-on: windows-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -78,7 +82,7 @@ jobs:
       - name: Build Windows wheels
         uses: PyO3/maturin-action@v1
         with:
-          args: --release --strip --features htslib --out dist -i python3.12
+          args: --release --strip --features htslib --out dist -i python
           sccache: "true"
 
       - uses: actions/upload-artifact@v4
@@ -105,7 +109,7 @@ jobs:
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    needs: [linux, macos, windows, sdist]
+    needs: [linux, macos, sdist]
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -117,6 +121,9 @@ jobs:
         with:
           name: sdist
           path: dist
+
+      - name: List artifacts
+        run: ls -lh dist/
 
       - name: Publish
         uses: PyO3/maturin-action@v1

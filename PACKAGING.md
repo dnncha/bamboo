@@ -98,3 +98,4 @@ conda install --use-local -c file://$PWD/conda/dist bamboo-hts
 | `pileup_available()` is False | Reinstall from PyPI wheel built with htslib feature (not a noodles-only dev build) |
 | Conda build can't find `maturin` | Add `maturin >=1.5,<2` to host requirements |
 | htslib compile errors on Linux | Ensure `zlib`, `bzip2`, `xz`, `libdeflate`, `libcurl` host deps (see recipe) |
+| Windows wheel build fails in CI | `hts-sys` runs `version.sh` at compile time — Windows wheels are optional until upstream fixes land |
