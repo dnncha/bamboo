@@ -27,15 +27,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Linux build deps
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev patchelf
+
       - name: Build manylinux wheels
         uses: PyO3/maturin-action@v1
         with:
+          container: off
           target: ${{ matrix.target }}
-          args: --release --strip --features htslib --out dist -i python3.12
+          args: --release --strip --features htslib --out dist -i python3.12 --compatibility manylinux_2_28
           sccache: "true"
-          manylinux: auto
-          before-script-linux: |
-            yum install -y clang || dnf install -y clang
 
       - uses: actions/upload-artifact@v4
         with:
