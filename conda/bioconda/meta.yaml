@@ -4,9 +4,9 @@
 #   1. Tag and push: git tag v0.1.0 && git push origin v0.1.0
 #   2. Wait for PyPI publish (release workflow)
 #   3. sha256sum dist/bamboo-0.1.0.tar.gz  (or curl PyPI sdist)
-#   4. Open PR: https://github.com/bioconda/bioconda-recipes
+#   4. Open PR: https://github.com/bioconda/bioconda-recipes (recipes/bamboo-hts/)
 
-{% set name = "bamboo" %}
+{% set name = "bamboo-hts" %}
 {% set version = "0.1.0" %}
 
 package:
@@ -21,7 +21,7 @@ build:
   number: 0
   script: {{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vvv
   run_exports:
-    - {{ pin_subpackage('bamboo', max_pin="x.x") }}
+    - {{ pin_subpackage('bamboo-hts', max_pin="x.x") }}
   missing_dso_whitelist:
     - "**/*.so"
 

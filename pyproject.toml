@@ -3,7 +3,7 @@ requires = ["maturin>=1.5,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "bamboo"
+name = "bamboo-hts"
 version = "0.1.0"
 description = "High-performance, modern Python library for HTS data (BAM, CRAM, VCF, etc.)"
 readme = "README.md"

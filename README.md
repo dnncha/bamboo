@@ -38,7 +38,7 @@ Implemented today:
 - Pileup via htslib (optional build feature)
 
 Still planned:
-- PyPI / Bioconda packaging
+- PyPI publish (`bamboo-hts`) + Bioconda merge
 - Unified `AlignmentFile(..., "rc")` for CRAM
 - SAM/CRAM writing, CSI/tabix, coverage APIs
 - Parity on messy production files (long reads, exotic tags)
@@ -46,20 +46,26 @@ Still planned:
 ## Installation
 
 ```bash
-pip install bamboo
+pip install bamboo-hts
 ```
+
+```python
+import bamboo  # Python module name (not bamboo-hts)
+```
+
+> **Note:** PyPI package is `bamboo-hts` because [`bamboo`](https://pypi.org/project/bamboo/) is an unrelated imaging library.
 
 Optional extras:
 
 ```bash
-pip install bamboo[polars]   # Polars adapter
-pip install bamboo[pandas]   # Pandas adapter
+pip install bamboo-hts[polars]   # Polars adapter
+pip install bamboo-hts[pandas]   # Pandas adapter
 ```
 
 **Conda** (after [Bioconda recipe](conda/bioconda/meta.yaml) is merged):
 
 ```bash
-conda install -c bioconda -c conda-forge bamboo
+conda install -c bioconda -c conda-forge bamboo-hts
 ```
 
 Wheels bundle htslib — no system `libhts` or maturin required. See [PACKAGING.md](PACKAGING.md) for release and conda-build details.

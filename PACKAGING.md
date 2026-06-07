@@ -5,16 +5,18 @@ Bamboo ships as **PyPI wheels** (primary) and a **Bioconda recipe** (for conda/m
 ## User install
 
 ```bash
-# PyPI (recommended)
-pip install bamboo
+# PyPI (recommended) — distribution name is bamboo-hts; import is still bamboo
+pip install bamboo-hts
 
 # Optional extras
-pip install bamboo[polars]
-pip install bamboo[pandas]
+pip install bamboo-hts[polars]
+pip install bamboo-hts[pandas]
 
 # Conda (after bioconda recipe is merged)
-conda install -c bioconda -c conda-forge bamboo
+conda install -c bioconda -c conda-forge bamboo-hts
 ```
+
+> PyPI name `bamboo` is taken by an unrelated imaging package. We publish as **`bamboo-hts`**.
 
 No maturin or Rust toolchain required for end users — wheels bundle the compiled extension and bundled htslib (via `rust-htslib` / `hts-sys`).
 
@@ -39,11 +41,11 @@ The [Release workflow](.github/workflows/release.yml) builds:
 - manylinux wheels (`x86_64`, `aarch64`)
 - macOS wheels (`x86_64`, `aarch64`)
 - Windows wheels
-- source distribution (`bamboo-0.1.0.tar.gz`)
+- source distribution (`bamboo-hts-0.1.0.tar.gz`)
 
 and uploads to PyPI when `PYPI_API_TOKEN` is set in GitHub repository secrets.
 
-Create a PyPI API token at https://pypi.org/manage/account/token/ with scope for the `bamboo` project (or entire account for first upload).
+Create a PyPI API token at https://pypi.org/manage/account/token/ with scope for the `bamboo-hts` project (or entire account for first upload).
 
 ### 3. Verify locally before tagging (optional)
 
@@ -57,9 +59,9 @@ After PyPI publish completes:
 
 ```bash
 # Get sdist checksum
-curl -L -o /tmp/bamboo-0.1.0.tar.gz \
-  https://pypi.org/packages/source/b/bamboo/bamboo-0.1.0.tar.gz
-shasum -a 256 /tmp/bamboo-0.1.0.tar.gz
+curl -L -o /tmp/bamboo-hts-0.1.0.tar.gz \
+  https://pypi.org/packages/source/b/bamboo-hts/bamboo-hts-0.1.0.tar.gz
+shasum -a 256 /tmp/bamboo-hts-0.1.0.tar.gz
 ```
 
 Update `conda/bioconda/meta.yaml`:
@@ -67,14 +69,14 @@ Update `conda/bioconda/meta.yaml`:
 - `sha256`
 - increment `build.number` if re-building same version
 
-Open a PR to https://github.com/bioconda/bioconda-recipes adding `recipes/bamboo/meta.yaml` (copy from `conda/bioconda/meta.yaml`).
+Open a PR to https://github.com/bioconda/bioconda-recipes adding `recipes/bamboo-hts/meta.yaml` (copy from `conda/bioconda/meta.yaml`).
 
 ### 5. Local conda build (dev)
 
 ```bash
 conda install -c conda-forge conda-build maturin rust
 conda build conda/recipe --output-folder conda/dist
-conda install --use-local -c file://$PWD/conda/dist bamboo
+conda install --use-local -c file://$PWD/conda/dist bamboo-hts
 ```
 
 ## CI requirements

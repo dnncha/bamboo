@@ -24,7 +24,7 @@ python -m venv "${VENV}"
 # shellcheck disable=SC1091
 source "${VENV}/bin/activate"
 python -m pip install -q pyarrow
-python -m pip install "${OUT}"/bamboo-*.whl
+python -m pip install "${OUT}"/bamboo_hts-*.whl
 
 python - <<'PY'
 import bamboo as bm

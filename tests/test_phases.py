@@ -38,7 +38,7 @@ def test_phase2_indexed_region_columnar(tiny_bam_with_index: Path) -> None:
 def test_phase2_packaging_metadata() -> None:
     pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
     text = pyproject.read_text()
-    assert 'name = "bamboo"' in text
+    assert 'name = "bamboo-hts"' in text
     assert "pyarrow" in text
 
 

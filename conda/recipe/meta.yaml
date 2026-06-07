@@ -1,4 +1,4 @@
-{% set name = "bamboo" %}
+{% set name = "bamboo-hts" %}
 {% set version = "0.1.0" %}
 
 package:
@@ -15,9 +15,9 @@ build:
   script:
     - cargo-bundle-licenses --format yaml --output THIRDPARTY.yml || true
     - maturin build --release --strip --features htslib -o dist
-    - pip install dist/bamboo-*.whl --no-deps -vv
+    - pip install dist/bamboo_hts-*.whl --no-deps -vv
   run_exports:
-    - {{ pin_subpackage('bamboo', max_pin="x.x") }}
+    - {{ pin_subpackage('bamboo-hts', max_pin="x.x") }}
   missing_dso_whitelist:
     - "**/*.so"
 

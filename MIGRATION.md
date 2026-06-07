@@ -5,8 +5,9 @@ Bamboo is designed as a **drop-in replacement for common pysam read paths**, wit
 ## Install
 
 ```bash
-pip install bamboo
-# conda (after bioconda merge): conda install -c bioconda -c conda-forge bamboo
+pip install bamboo-hts
+import bamboo  # module name unchanged
+# conda (after bioconda merge): conda install -c bioconda -c conda-forge bamboo-hts
 ```
 
 ## Quick swap (record iteration)
