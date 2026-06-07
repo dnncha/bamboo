@@ -45,7 +45,13 @@ The [Release workflow](.github/workflows/release.yml) builds:
 
 and uploads to PyPI when `PYPI_API_TOKEN` is set in GitHub repository secrets.
 
-Create a PyPI API token at https://pypi.org/manage/account/token/ with scope for the `bamboo-hts` project (or entire account for first upload).
+Create a PyPI API token at https://pypi.org/manage/account/token/ with scope for the `bamboo-hts` project (or entire account for first upload), then:
+
+```bash
+gh secret set PYPI_API_TOKEN --repo dnncha/bamboo
+```
+
+Re-run a failed release from the Actions tab (**workflow_dispatch**) or re-push the tag after the secret is set.
 
 ### 3. Verify locally before tagging (optional)
 
