@@ -124,13 +124,14 @@ impl PyCramFile {
         self.to_arrow(py, columns, tags, region, min_mapq)
     }
 
-    #[pyo3(signature = (contig=None, start=0, stop=0x7fff_ffff, *, region=None))]
+    #[pyo3(signature = (contig=None, start=0, stop=0x7fff_ffff, *, region=None, reads=true))]
     fn pileup(
         &self,
         contig: Option<String>,
         start: u32,
         stop: u32,
         region: Option<String>,
+        reads: bool,
     ) -> PyResult<pileup::PyPileupIterator> {
         if !self.reader.has_index() {
             return Err(pyo3::exceptions::PyValueError::new_err(
@@ -157,6 +158,7 @@ impl PyCramFile {
             region_start,
             region_end,
             self.reader.reference_fasta(),
+            reads,
         )
     }
 

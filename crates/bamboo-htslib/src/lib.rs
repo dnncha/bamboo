@@ -10,7 +10,7 @@ mod pileup;
 #[cfg(feature = "htslib")]
 pub use error::HtslibError;
 #[cfg(feature = "htslib")]
-pub use pileup::{pileup_region, PileupColumn, PileupRead};
+pub use pileup::{pileup_region, PileupColumn, PileupRead, PileupStream};
 
 /// Placeholder marker for future htslib integration.
 pub const PHASE: &str = "phase-2-cram-via-noodles";

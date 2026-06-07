@@ -614,7 +614,7 @@ def task_bam_region_pileup(
 
         def run() -> int:
             with bm.AlignmentFile(str(bam_path)) as bam:
-                return sum(1 for _ in bam.pileup(contig, start, end))
+                return sum(1 for _ in bam.pileup(contig, start, end, reads=False))
 
         return run
 
@@ -653,7 +653,7 @@ def task_cram_region_pileup(
             if reference_path is not None:
                 kwargs["reference_filename"] = str(reference_path)
             with bm.CramFile(str(cram_path), **kwargs) as cram:
-                return sum(1 for _ in cram.pileup(contig, start, end))
+                return sum(1 for _ in cram.pileup(contig, start, end, reads=False))
 
         return run
 

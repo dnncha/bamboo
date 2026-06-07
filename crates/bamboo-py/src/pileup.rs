@@ -97,9 +97,10 @@ impl PyPileupColumn {
     }
 }
 
-#[pyclass(name = "PileupIterator")]
+#[pyclass(name = "PileupIterator", unsendable)]
 pub struct PyPileupIterator {
-    columns: std::vec::IntoIter<PyPileupColumn>,
+    #[cfg(feature = "htslib")]
+    stream: Option<bamboo_htslib::PileupStream>,
 }
 
 #[pymethods]
@@ -109,9 +110,28 @@ impl PyPileupIterator {
     }
 
     fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<PyPileupColumn>> {
-        match slf.columns.next() {
-            Some(column) => Ok(Some(column)),
-            None => Err(PyStopIteration::new_err(())),
+        #[cfg(feature = "htslib")]
+        {
+            let stream = slf
+                .stream
+                .as_mut()
+                .ok_or_else(|| PyRuntimeError::new_err("pileup iterator is exhausted"))?;
+
+            match stream.next_column() {
+                Some(Ok(column)) => Ok(Some(column_to_py(&column))),
+                Some(Err(err)) => Err(htslib_to_py_err(err)),
+                None => {
+                    slf.stream = None;
+                    Err(PyStopIteration::new_err(()))
+                }
+            }
+        }
+
+        #[cfg(not(feature = "htslib"))]
+        {
+            Err(PyRuntimeError::new_err(
+                "pileup requires Bamboo built with the 'htslib' feature",
+            ))
         }
     }
 }
@@ -122,43 +142,60 @@ pub fn pileup_region(
     start: u32,
     end: u32,
     reference_filename: Option<&str>,
+    materialize_reads: bool,
 ) -> PyResult<PyPileupIterator> {
     #[cfg(feature = "htslib")]
     {
-        let columns = bamboo_htslib::pileup_region(path, contig, start, end, reference_filename)
-            .map_err(htslib_to_py_err)?
-            .into_iter()
-            .map(|column| PyPileupColumn {
-                reference_name: column.reference_name,
-                reference_id: column.reference_id,
-                position: column.position,
-                depth: column.depth,
-                reads: column
-                    .reads
-                    .into_iter()
-                    .map(|read| PyPileupRead {
-                        query_name: read.query_name,
-                        query_position: read.query_position,
-                        is_del: read.is_del,
-                        is_head: read.is_head,
-                        is_tail: read.is_tail,
-                        is_refskip: read.is_refskip,
-                    })
-                    .collect(),
-            })
-            .collect::<Vec<_>>();
+        let stream = bamboo_htslib::PileupStream::open(
+            path,
+            contig,
+            start,
+            end,
+            reference_filename,
+            materialize_reads,
+        )
+        .map_err(htslib_to_py_err)?;
 
         return Ok(PyPileupIterator {
-            columns: columns.into_iter(),
+            stream: Some(stream),
         });
     }
 
     #[cfg(not(feature = "htslib"))]
     {
-        let _ = (path, contig, start, end, reference_filename);
+        let _ = (
+            path,
+            contig,
+            start,
+            end,
+            reference_filename,
+            materialize_reads,
+        );
         Err(PyRuntimeError::new_err(
             "pileup requires Bamboo built with the 'htslib' feature",
         ))
+    }
+}
+
+#[cfg(feature = "htslib")]
+fn column_to_py(column: &bamboo_htslib::PileupColumn) -> PyPileupColumn {
+    PyPileupColumn {
+        reference_name: column.reference_name.clone(),
+        reference_id: column.reference_id,
+        position: column.position,
+        depth: column.depth,
+        reads: column
+            .reads
+            .iter()
+            .map(|read| PyPileupRead {
+                query_name: read.query_name.clone(),
+                query_position: read.query_position,
+                is_del: read.is_del,
+                is_head: read.is_head,
+                is_tail: read.is_tail,
+                is_refskip: read.is_refskip,
+            })
+            .collect(),
     }
 }
 
@@ -170,4 +207,3 @@ fn htslib_to_py_err(error: bamboo_htslib::HtslibError) -> PyErr {
         bamboo_htslib::HtslibError::Message(message) => PyRuntimeError::new_err(message),
     }
 }
-

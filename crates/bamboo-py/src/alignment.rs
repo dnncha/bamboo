@@ -390,13 +390,14 @@ impl PyAlignmentFile {
         table_to_pyarrow(py, &table)
     }
 
-    #[pyo3(signature = (contig=None, start=0, stop=0x7fff_ffff, *, region=None))]
+    #[pyo3(signature = (contig=None, start=0, stop=0x7fff_ffff, *, region=None, reads=true))]
     fn pileup(
         &self,
         contig: Option<String>,
         start: u32,
         stop: u32,
         region: Option<String>,
+        reads: bool,
     ) -> PyResult<pileup::PyPileupIterator> {
         let reader = self.reader()?;
         if !reader.has_index() {
@@ -418,7 +419,14 @@ impl PyAlignmentFile {
             (contig, start, stop)
         };
 
-        pileup::pileup_region(reader.uri(), &reference_name, region_start, region_end, None)
+        pileup::pileup_region(
+            reader.uri(),
+            &reference_name,
+            region_start,
+            region_end,
+            None,
+            reads,
+        )
     }
 
     fn filename(&self) -> String {
