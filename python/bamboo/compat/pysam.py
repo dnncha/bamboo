@@ -6,19 +6,21 @@ Use this module when migrating pipelines that import pysam for BAM reading::
     # before
     import pysam
 
-    # after
+    # after (step 1 — no other code changes)
     from bamboo.compat import pysam
 
 The object API mirrors common pysam patterns. For analytics workloads prefer
-``bamboo.read_columns()`` or ``AlignmentFile.read_table()`` — they stay in
+``bamboo.read_columns()`` or ``AlignmentFile.to_arrow()`` — they stay in
 Rust end-to-end and avoid per-record Python overhead.
+
+See MIGRATION.md for the full mapping table and validation checklist.
 """
 
 from __future__ import annotations
 
 from bamboo import AlignedSegment, AlignmentFile, read_bam_table, read_columns
 
-# Historical pysam alias
+# Historical pysam aliases
 Samfile = AlignmentFile
 AlignedRead = AlignedSegment
 
@@ -33,6 +35,7 @@ def read_alignment_columns(
     filename: str,
     *,
     columns: list[str] | None = None,
+    tags: list[str] | None = None,
     region: str | None = None,
     min_mapq: int | None = None,
 ):
@@ -40,6 +43,7 @@ def read_alignment_columns(
     return read_columns(
         filename,
         columns=columns,
+        tags=tags,
         region=region,
         min_mapq=min_mapq,
     )

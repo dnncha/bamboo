@@ -24,30 +24,24 @@ Bamboo aims to be the library you actually want to use when writing modern genom
 
 ## Current Status
 
-**MVP milestone: BAM reading works.**
+**MVP: BAM + CRAM reading, columnar Arrow export, pysam parity CI, pileup (htslib).**
 
 Implemented today:
-- Rust workspace (`bamboo-core`, `bamboo-io`, `bamboo-noodles`, `bamboo-py`)
-- `bamboo.AlignmentFile` with iteration, region fetch, and indexed fetch (`.bai`)
-- Unified path I/O via `bamboo-io`: local paths, `file://`, `https://`, `s3://`, and `gs://`
-- BAM writing via `AlignmentFile(..., "wb")` with `write()` and pysam-style `template=`
-- Columnar scan to PyArrow via `read_bam_table()` and `AlignmentFile.to_arrow()`
-- Polars helper via `bamboo.to_polars()`
-- Test fixtures and examples
+- Rust workspace (`bamboo-core`, `bamboo-io`, `bamboo-noodles`, `bamboo-htslib`, `bamboo-py`)
+- `bamboo.AlignmentFile` — iteration, region fetch, indexed fetch, BAM write
+- `bamboo.CramFile` — CRAM decode with external reference, columnar + pileup
+- VCF/BCF readers with Arrow export
+- Columnar scan to PyArrow via `read_columns()` / `to_arrow()` (BAM + CRAM)
+- pysam parity tests on tiny fixtures **and** 50k-read synthetic cohort data
+- `from bamboo.compat import pysam` drop-in shim — see **[MIGRATION.md](MIGRATION.md)**
+- Cloud I/O: `s3://`, `gs://`, `https://`, `file://`
+- Pileup via htslib (optional build feature)
 
-Still planned for full MVP:
-- CRAM decoding and SAM/CRAM writing (via `bamboo-htslib`)
-- Basic VCF/BCF support
+Still planned:
 - PyPI / Bioconda packaging
-- Comprehensive test suite against real-world data (long reads, weird tags)
-
-Later:
-- Full pysam-like API surface + compatibility layer
-- Writing support for more formats
-- Indexed random access (bai/crai/csi/tabix)
-- Pileup / depth engines
-- Variant annotation helpers
-- WASM / browser support (stretch)
+- Unified `AlignmentFile(..., "rc")` for CRAM
+- SAM/CRAM writing, CSI/tabix, coverage APIs
+- Parity on messy production files (long reads, exotic tags)
 
 ## Installation (future)
 
@@ -75,21 +69,36 @@ cargo run -p bamboo-noodles --example generate_fixtures
 
 ## Quick Start
 
+**Migrating from pysam?** Start with [MIGRATION.md](MIGRATION.md) — one-line import swap, API table, validation checklist.
+
+**Killer workflow** (indexed region → Arrow → Polars QC):
+
+```python
+import bamboo as bm
+
+table = bm.read_columns(
+    "cohort.bam",
+    columns=["qname", "rname", "pos", "mapq", "flag"],
+    region="chr1:1000000-5000000",
+    min_mapq=30,
+)
+df = bm.to_polars(table)  # requires polars
+print(df.group_by("rname").len())
+```
+
+Runnable demo: `python examples/cohort_region_qc.py tests/data/tiny.bam --region chr1:100-500`
+
+**Record iteration** (pysam-familiar):
+
 ```python
 import bamboo as bm
 
 with bm.AlignmentFile("aligned.bam") as bam:
-    print(bam.header())          # {'chr1': 248956422, ...}
-    print(bam.references())      # ['chr1', 'chr2', ...]
-
     for read in bam.fetch(region="chr1:1000000-1001000"):
         print(read.query_name, read.reference_start, read.cigarstring)
-
-    table = bam.to_arrow(columns=["qname", "rname", "pos", "mapq"], region="chr1:1-1000000")
-    df = bm.to_polars(table)     # requires polars
 ```
 
-See `examples/read_bam.py` for a command-line demo.
+See also `examples/read_bam.py`.
 
 ## Cloud and remote paths
 

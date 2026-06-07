@@ -165,31 +165,25 @@ def test_write_roundtrip_matches_pysam(tiny_bam_path: Path, tmp_path: Path) -> N
     assert _bamboo_rows(bamboo_out) == _bamboo_rows(tiny_bam_path)
 
 
-@pytest.fixture(scope="session")
-def bench_bam_path() -> Path | None:
-    path = Path(__file__).resolve().parents[1] / "benchmarks" / "data" / "bench_50000.bam"
-    if not path.exists():
-        return None
-    return path
-
-
-def test_bench_file_count_matches_pysam(bench_bam_path: Path | None) -> None:
-    if bench_bam_path is None:
-        pytest.skip("missing benchmarks/data/bench_50000.bam")
-
-    with bamboo.AlignmentFile(str(bench_bam_path)) as bam:
+def test_bench_file_count_matches_pysam(bench_bam_with_index: Path) -> None:
+    with bamboo.AlignmentFile(str(bench_bam_with_index)) as bam:
         bamboo_count = bam.count()
-    with pysam.AlignmentFile(str(bench_bam_path), "rb") as bam:
+    with pysam.AlignmentFile(str(bench_bam_with_index), "rb") as bam:
         pysam_count = sum(1 for _ in bam)
     assert bamboo_count == pysam_count
 
 
-def test_bench_region_fetch_count_matches_pysam(bench_bam_path: Path | None) -> None:
-    if bench_bam_path is None:
-        pytest.skip("missing benchmarks/data/bench_50000.bam")
-
+def test_bench_region_fetch_count_matches_pysam(bench_bam_with_index: Path) -> None:
     region = "chr1:1000000-5000000"
-    bamboo_rows = _bamboo_rows(bench_bam_path, region=region)
-    pysam_rows = _pysam_rows(bench_bam_path, region=region)
+    bamboo_rows = _bamboo_rows(bench_bam_with_index, region=region)
+    pysam_rows = _pysam_rows(bench_bam_with_index, region=region)
     assert len(bamboo_rows) == len(pysam_rows)
     assert bamboo_rows == pysam_rows
+
+
+def test_tiny_bam_flag_helpers_match_pysam(tiny_bam_path: Path) -> None:
+    with bamboo.AlignmentFile(str(tiny_bam_path)) as bam:
+        bamboo_flags = [(read.flag, read.is_paired, read.is_unmapped, read.is_reverse) for read in bam]
+    with pysam.AlignmentFile(str(tiny_bam_path), "rb") as bam:
+        pysam_flags = [(read.flag, read.is_paired, read.is_unmapped, read.is_reverse) for read in bam]
+    assert bamboo_flags == pysam_flags

@@ -6,7 +6,7 @@ use bamboo_core::BamTable;
 use bamboo_noodles::{
     scan_reader, AlignedRecord, BamReader, BamRecordStream, BamWriter, CramRecordStream,
 };
-use pyo3::exceptions::{PyStopIteration, PyValueError};
+use pyo3::exceptions::{PyKeyError, PyStopIteration, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -60,6 +60,52 @@ impl PyAlignedSegment {
     #[getter]
     fn query_qualities(&self) -> Option<String> {
         self.inner.query_qualities.clone()
+    }
+
+    #[getter]
+    fn next_reference_name(&self) -> Option<String> {
+        self.inner.mate_reference_name.clone()
+    }
+
+    #[getter]
+    fn next_reference_start(&self) -> Option<i64> {
+        self.inner.mate_reference_start
+    }
+
+    #[getter]
+    fn template_length(&self) -> Option<i32> {
+        self.inner.template_length
+    }
+
+    #[getter]
+    fn is_paired(&self) -> bool {
+        self.inner.flag & 0x1 != 0
+    }
+
+    #[getter]
+    fn is_unmapped(&self) -> bool {
+        self.inner.flag & 0x4 != 0
+    }
+
+    #[getter]
+    fn is_reverse(&self) -> bool {
+        self.inner.flag & 0x10 != 0
+    }
+
+    fn get_tag(&self, py: Python<'_>, tag: &str) -> PyResult<PyObject> {
+        for (name, value) in &self.inner.tags {
+            if name == tag {
+                return tag_value_to_py(py, value);
+            }
+        }
+        Err(PyKeyError::new_err(format!("tag '{tag}' not present")))
+    }
+
+    fn has_tag(&self, tag: &str) -> bool {
+        self.inner
+            .tags
+            .iter()
+            .any(|(name, value)| name == tag && !matches!(value, bamboo_core::TagValue::Missing))
     }
 
     fn get_tags(&self, py: Python<'_>) -> PyResult<PyObject> {
