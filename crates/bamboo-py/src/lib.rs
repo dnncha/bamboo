@@ -1,6 +1,7 @@
 mod alignment;
 mod cram_file;
 mod errors;
+mod pileup;
 mod table;
 mod variant;
 mod vcf_table;
@@ -30,7 +31,28 @@ fn _bamboo(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVariantRecord>()?;
     m.add_function(wrap_pyfunction!(read_vcf_table, m)?)?;
     m.add_function(wrap_pyfunction!(read_bcf_table, m)?)?;
+    m.add_class::<pileup::PyPileupColumn>()?;
+    m.add_class::<pileup::PyPileupRead>()?;
+    m.add_class::<pileup::PyPileupIterator>()?;
+    m.add_function(wrap_pyfunction!(pileup_available, m)?)?;
+    m.add_function(wrap_pyfunction!(htslib_available, m)?)?;
+    m.add_function(wrap_pyfunction!(primary_backend, m)?)?;
     Ok(())
+}
+
+#[pyfunction]
+fn pileup_available() -> bool {
+    bamboo_htslib::pileup_available()
+}
+
+#[pyfunction]
+fn htslib_available() -> bool {
+    bamboo_htslib::is_available()
+}
+
+#[pyfunction]
+fn primary_backend() -> &'static str {
+    bamboo_htslib::primary_backend()
 }
 
 #[pyfunction]

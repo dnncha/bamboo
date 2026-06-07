@@ -165,3 +165,18 @@ def test_phase4_polars_adapter(tiny_bam_path: Path) -> None:
     df = bamboo.to_polars(table)
     assert len(df) == 2
     assert isinstance(df, pl.DataFrame)
+
+
+def test_phase4_pandas_adapter(tiny_bam_path: Path) -> None:
+    pd = pytest.importorskip("pandas")
+
+    table = bamboo.read_bam_table(str(tiny_bam_path), columns=["qname", "mapq"])
+    df = bamboo.to_pandas(table)
+    assert len(df) == 2
+    assert isinstance(df, pd.DataFrame)
+
+
+def test_phase3_htslib_capability_probes() -> None:
+    assert bamboo.primary_backend() == "noodles"
+    assert isinstance(bamboo.htslib_available(), bool)
+    assert isinstance(bamboo.pileup_available(), bool)

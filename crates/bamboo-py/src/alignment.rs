@@ -1,4 +1,5 @@
 use crate::errors;
+use crate::pileup;
 use crate::{build_scan_options, table::table_to_pyarrow};
 use bamboo_core::{BamScanOptions, FetchRegion};
 use bamboo_core::BamTable;
@@ -387,6 +388,37 @@ impl PyAlignmentFile {
             }
         };
         table_to_pyarrow(py, &table)
+    }
+
+    #[pyo3(signature = (contig=None, start=0, stop=0x7fff_ffff, *, region=None))]
+    fn pileup(
+        &self,
+        contig: Option<String>,
+        start: u32,
+        stop: u32,
+        region: Option<String>,
+    ) -> PyResult<pileup::PyPileupIterator> {
+        let reader = self.reader()?;
+        if !reader.has_index() {
+            return Err(PyValueError::new_err(
+                "pileup requires an indexed BAM (missing .bai)",
+            ));
+        }
+
+        let (reference_name, region_start, region_end) = if let Some(region) = region {
+            let parsed =
+                FetchRegion::from_samtools_region(&region).map_err(errors::into_py_err)?;
+            let start = parsed.start.unwrap_or(0);
+            let end = parsed.end.unwrap_or(u32::MAX);
+            (parsed.reference_name, start, end)
+        } else {
+            let contig = contig.ok_or_else(|| {
+                PyValueError::new_err("pileup requires contig or region=...")
+            })?;
+            (contig, start, stop)
+        };
+
+        pileup::pileup_region(reader.uri(), &reference_name, region_start, region_end)
     }
 
     fn filename(&self) -> String {

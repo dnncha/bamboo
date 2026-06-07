@@ -11,6 +11,10 @@ authors.workspace = true
 name = "_bamboo"
 crate-type = ["cdylib"]
 
+[features]
+default = []
+htslib = ["bamboo-htslib/htslib"]
+
 [dependencies]
 bamboo-core = { path = "../bamboo-core" }
 bamboo-htslib = { path = "../bamboo-htslib" }

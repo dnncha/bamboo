@@ -1,19 +1,28 @@
 //! htslib-backed operations for Bamboo.
 //!
-//! Phase 2 CRAM decoding with reference genomes and pileup remain here.
-//! BAM/VCF read paths are implemented via `bamboo-noodles` (noodles).
+//! BAM/VCF read paths use `bamboo-noodles`; pileup and future write paths use htslib.
+
+#[cfg(feature = "htslib")]
+mod error;
+#[cfg(feature = "htslib")]
+mod pileup;
+
+#[cfg(feature = "htslib")]
+pub use error::HtslibError;
+#[cfg(feature = "htslib")]
+pub use pileup::{pileup_region, PileupColumn, PileupRead};
 
 /// Placeholder marker for future htslib integration.
 pub const PHASE: &str = "phase-2-cram-via-noodles";
 
 /// Returns whether htslib-backed features are compiled in.
 pub fn is_available() -> bool {
-    false
+    cfg!(feature = "htslib")
 }
 
 /// Returns whether pileup is available through htslib.
 pub fn pileup_available() -> bool {
-    false
+    cfg!(feature = "htslib")
 }
 
 /// Recommended backend for alignment I/O today.

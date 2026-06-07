@@ -30,7 +30,7 @@ jobs:
         run: cargo run -p bamboo-noodles --example generate_fixtures
 
       - name: Build extension
-        run: maturin develop --release
+        run: maturin develop --release --features htslib
 
       - name: Rust tests
         run: cargo test --workspace

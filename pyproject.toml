@@ -52,7 +52,7 @@ Issues = "https://github.com/donncha/bamboo/issues"
 manifest-path = "crates/bamboo-py/Cargo.toml"
 python-source = "python"
 module-name = "bamboo._bamboo"
-features = ["pyo3/extension-module"]
+features = ["pyo3/extension-module", "htslib"]
 
 [tool.ruff]
 line-length = 88

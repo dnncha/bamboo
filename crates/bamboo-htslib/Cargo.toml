@@ -7,6 +7,15 @@ repository.workspace = true
 description = "htslib-backed CRAM, write, and pileup support for Bamboo (Phase 2)"
 authors.workspace = true
 
+[features]
+default = []
+htslib = ["dep:rust-htslib"]
+
 [dependencies]
 bamboo-core = { path = "../bamboo-core" }
 thiserror = "2"
+rust-htslib = { version = "0.47", optional = true }
+
+[dev-dependencies]
+bamboo-noodles = { path = "../bamboo-noodles" }
+tempfile = "3"

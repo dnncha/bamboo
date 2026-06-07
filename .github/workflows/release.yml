@@ -20,8 +20,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y libhts-dev
+
       - name: Build wheels
-        run: pip install maturin && maturin build --release --strip
+        run: pip install maturin && maturin build --release --strip --features htslib
 
       - name: Publish to PyPI
         env:

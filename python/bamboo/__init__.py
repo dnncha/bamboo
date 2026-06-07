@@ -24,9 +24,12 @@ try:
         read_cram_columns,
         read_vcf_table,
         scan_bam_table,
+        pileup_available,
+        htslib_available,
+        primary_backend,
     )
     from bamboo import compat
-    from bamboo.arrow import to_polars
+    from bamboo.arrow import to_pandas, to_polars
 except ImportError:
     AlignedSegment = None  # type: ignore[assignment,misc]
     AlignmentFile = None  # type: ignore[assignment,misc]
@@ -42,6 +45,10 @@ except ImportError:
     scan_bam_table = None  # type: ignore[assignment,misc]
     compat = None  # type: ignore[assignment,misc]
     to_polars = None  # type: ignore[assignment,misc]
+    to_pandas = None  # type: ignore[assignment,misc]
+    pileup_available = None  # type: ignore[assignment,misc]
+    htslib_available = None  # type: ignore[assignment,misc]
+    primary_backend = None  # type: ignore[assignment,misc]
     _rust_version = None
 
 if _rust_version is not None:
@@ -63,4 +70,8 @@ __all__ = [
     "read_vcf_table",
     "scan_bam_table",
     "to_polars",
+    "to_pandas",
+    "pileup_available",
+    "htslib_available",
+    "primary_backend",
 ]

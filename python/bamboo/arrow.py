@@ -13,3 +13,8 @@ def to_polars(table: pa.Table) -> Any:
     import polars as pl
 
     return pl.from_arrow(table)
+
+
+def to_pandas(table: pa.Table) -> Any:
+    """Convert a PyArrow table to a pandas DataFrame."""
+    return table.to_pandas()
