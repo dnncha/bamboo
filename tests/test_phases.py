@@ -105,6 +105,30 @@ def test_phase2_cram_reader(tiny_cram_with_index: Path) -> None:
         assert len(list(cram.fetch(region="chr1:100-101"))) == 1
 
 
+def test_phase2_cram_columnar_with_indexed_fasta(
+    tiny_cram_with_index: Path,
+    tiny_fasta_with_index: Path,
+) -> None:
+    pa = pytest.importorskip("pyarrow")
+
+    table = bamboo.read_cram_columns(
+        str(tiny_cram_with_index),
+        columns=["qname", "pos"],
+        region="chr1:100-101",
+        reference_filename=str(tiny_fasta_with_index),
+    )
+    assert isinstance(table, pa.Table)
+    assert table.num_rows == 1
+
+
+@pytest.fixture(scope="session")
+def tiny_fasta_with_index() -> Path:
+    path = Path(__file__).resolve().parent / "data" / "tiny.fasta"
+    if not path.exists() or not Path(f"{path}.fai").exists():
+        pytest.skip("missing tests/data/tiny.fasta or .fai")
+    return path
+
+
 def test_phase2_cram_columnar(tiny_cram_with_index: Path) -> None:
     pa = pytest.importorskip("pyarrow")
 

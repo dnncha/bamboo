@@ -471,6 +471,26 @@ pub fn write_bench_cram_index(cram_path: &Path) -> io::Result<()> {
     write_tiny_cram_index(cram_path)
 }
 
+/// Write a FAI index for a FASTA fixture.
+pub fn write_fasta_index(fasta_path: &Path) -> io::Result<()> {
+    use noodles::fasta as fasta;
+
+    let index = fasta::fs::index(fasta_path)?;
+    let mut index_path = std::ffi::OsString::from(fasta_path);
+    index_path.push(".fai");
+    fasta::fai::fs::write(PathBuf::from(index_path), &index)
+}
+
+/// Write a FAI sidecar for `tiny.fasta`.
+pub fn write_tiny_fasta_index(fasta_path: &Path) -> io::Result<()> {
+    write_fasta_index(fasta_path)
+}
+
+/// Write a FAI sidecar for a benchmark FASTA.
+pub fn write_bench_fasta_index(fasta_path: &Path) -> io::Result<()> {
+    write_fasta_index(fasta_path)
+}
+
 /// Write a FASTA reference for benchmark CRAMs.
 pub fn write_bench_fasta(path: &Path) -> io::Result<()> {
     use noodles::fasta as fasta;

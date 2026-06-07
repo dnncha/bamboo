@@ -30,12 +30,14 @@ def ensure_bench_data(data_dir: Path, record_count: int) -> tuple[Path, Path, Pa
     cram_path = data_dir / f"bench_{record_count}.cram"
     crai_path = Path(f"{cram_path}.crai")
     fasta_path = data_dir / f"bench_{record_count}.fasta"
+    fai_path = Path(f"{fasta_path}.fai")
     if (
         bam_path.exists()
         and bai_path.exists()
         and cram_path.exists()
         and crai_path.exists()
         and fasta_path.exists()
+        and fai_path.exists()
     ):
         return bam_path, cram_path, fasta_path
 

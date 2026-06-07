@@ -5,6 +5,7 @@ mod bcf;
 mod columnar;
 mod cram;
 mod cram_columnar;
+mod cram_refs;
 mod lazy_fetch;
 mod error;
 mod header_util;

@@ -1,4 +1,5 @@
-use crate::cram::{cram_index_path, read_header_from_path, reference_repository};
+use crate::cram::{cram_index_path, read_header_from_path};
+use crate::cram_refs::reference_repository_for_scan;
 use crate::error::NoodlesError;
 use bamboo_core::{BamColumn, BamScanOptions, BamTable, TagValue};
 use noodles::cram as cram;
@@ -15,7 +16,8 @@ pub fn scan_cram_columnar(
     reference_fasta: Option<&str>,
 ) -> Result<BamTable, NoodlesError> {
     let header = read_header_from_path(path)?;
-    let repository = reference_repository(&header, reference_fasta)?;
+    let repository =
+        reference_repository_for_scan(&header, reference_fasta, options.region.as_ref())?;
     let estimated = estimate_row_capacity(path, options.region.is_some());
     let mut table = BamTable::with_capacity(options.columns.clone(), options.tags.clone(), estimated);
 
@@ -248,7 +250,7 @@ mod tests {
     use super::*;
     use crate::fixtures::{
         tiny_bam_path, tiny_cram_path, tiny_fasta_path, write_tiny_bam, write_tiny_cram,
-        write_tiny_cram_index, write_tiny_fasta,
+        write_tiny_cram_index, write_tiny_fasta, write_tiny_fasta_index,
     };
     use bamboo_core::{BamColumn, FetchRegion};
     use tempfile::tempdir;
@@ -285,6 +287,32 @@ mod tests {
         assert_eq!(indexed.pos, linear.pos);
         assert_eq!(indexed.mapq, linear.mapq);
         assert_eq!(indexed.cigar, linear.cigar);
+    }
+
+    #[test]
+    fn indexed_cram_columnar_with_fai_uses_region_reference() {
+        let dir = tempdir().unwrap();
+        let cram_path = tiny_cram_path(dir.path());
+        let fasta_path = tiny_fasta_path(dir.path());
+        write_tiny_cram(&cram_path).unwrap();
+        write_tiny_cram_index(&cram_path).unwrap();
+        write_tiny_fasta(&fasta_path).unwrap();
+        write_tiny_fasta_index(&fasta_path).unwrap();
+
+        let options = BamScanOptions {
+            region: Some(FetchRegion::from_samtools_region("chr1:100-101").expect("valid region")),
+            columns: vec![BamColumn::QueryName, BamColumn::Position],
+            ..Default::default()
+        };
+
+        let table = scan_cram_columnar(
+            cram_path.to_str().unwrap(),
+            options,
+            Some(fasta_path.to_str().unwrap()),
+        )
+        .unwrap();
+        assert_eq!(table.len(), 1);
+        assert_eq!(table.qname[0].as_deref(), Some("read1"));
     }
 
     #[test]

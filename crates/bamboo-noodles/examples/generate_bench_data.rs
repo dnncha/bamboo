@@ -2,7 +2,7 @@
 
 use bamboo_noodles::fixtures::{
     write_bench_bam, write_bench_bam_index, write_bench_cram, write_bench_cram_index,
-    write_bench_fasta,
+    write_bench_fasta, write_bench_fasta_index,
 };
 use std::env;
 use std::path::PathBuf;
@@ -30,14 +30,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let fasta_path = root.join(format!("bench_{record_count}.fasta"));
     write_bench_fasta(&fasta_path)?;
+    write_bench_fasta_index(&fasta_path)?;
 
     println!(
-        "Wrote {}, {}, {}, {}, and {}",
+        "Wrote {}, {}, {}, {}, {}, and {}",
         bam_path.display(),
         bam_path.with_extension("bam.bai").display(),
         cram_path.display(),
         format!("{}.crai", cram_path.display()),
-        fasta_path.display()
+        fasta_path.display(),
+        format!("{}.fai", fasta_path.display())
     );
     Ok(())
 }

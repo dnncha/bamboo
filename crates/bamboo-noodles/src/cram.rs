@@ -3,7 +3,6 @@ use crate::record::AlignedRecord;
 use bamboo_core::BamScanOptions;
 use noodles::cram as cram;
 use noodles::fasta as fasta;
-use noodles::fasta::record::{Definition, Sequence as FastaSequence};
 use noodles::sam::Header;
 use std::path::{Path, PathBuf};
 use std::vec;
@@ -20,7 +19,11 @@ impl CramRecordStream {
         reference_fasta: Option<&str>,
     ) -> Result<Self, NoodlesError> {
         let header = read_header_from_path(path)?;
-        let repository = reference_repository(&header, reference_fasta)?;
+        let repository = crate::cram_refs::reference_repository_for_scan(
+            &header,
+            reference_fasta,
+            options.region.as_ref(),
+        )?;
 
         let mut records = Vec::new();
         if let Some(region) = &options.region {
@@ -203,41 +206,6 @@ pub(crate) fn read_header_from_path(path: &str) -> Result<Header, NoodlesError> 
         .build_from_path(Path::new(path))
         .map_err(NoodlesError::from)?;
     reader.read_header().map_err(NoodlesError::from)
-}
-
-pub(crate) fn reference_repository(
-    header: &Header,
-    reference_fasta: Option<&str>,
-) -> Result<fasta::Repository, NoodlesError> {
-    if let Some(path) = reference_fasta {
-        return reference_repository_from_fasta(path);
-    }
-    Ok(reference_repository_from_header(header))
-}
-
-fn reference_repository_from_fasta(path: &str) -> Result<fasta::Repository, NoodlesError> {
-    let mut reader = fasta::io::reader::Builder::default()
-        .build_from_path(path)
-        .map_err(NoodlesError::from)?;
-    let records = reader
-        .records()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(NoodlesError::from)?;
-    Ok(fasta::Repository::new(records))
-}
-
-fn reference_repository_from_header(header: &Header) -> fasta::Repository {
-    let records = header
-        .reference_sequences()
-        .iter()
-        .map(|(name, reference)| {
-            fasta::Record::new(
-                Definition::new(name.to_string(), None),
-                FastaSequence::from(vec![b'N'; reference.length().get()]),
-            )
-        })
-        .collect::<Vec<_>>();
-    fasta::Repository::new(records)
 }
 
 #[cfg(test)]
