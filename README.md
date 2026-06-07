@@ -43,23 +43,38 @@ Still planned:
 - SAM/CRAM writing, CSI/tabix, coverage APIs
 - Parity on messy production files (long reads, exotic tags)
 
-## Installation (future)
+## Installation
 
 ```bash
 pip install bamboo
-# or
-conda install -c bioconda bamboo
 ```
 
-For development:
+Optional extras:
+
+```bash
+pip install bamboo[polars]   # Polars adapter
+pip install bamboo[pandas]   # Pandas adapter
+```
+
+**Conda** (after [Bioconda recipe](conda/bioconda/meta.yaml) is merged):
+
+```bash
+conda install -c bioconda -c conda-forge bamboo
+```
+
+Wheels bundle htslib — no system `libhts` or maturin required. See [PACKAGING.md](PACKAGING.md) for release and conda-build details.
+
+### Development
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install maturin pyarrow pytest
-maturin develop
+pip install maturin pyarrow pytest 'pysam>=0.22'
+maturin develop --release --features htslib
 pytest
 ```
+
+Smoke-test a release wheel locally: `./scripts/verify_wheel.sh`
 
 Generate test fixtures:
 

@@ -2,6 +2,13 @@
 
 Bamboo is designed as a **drop-in replacement for common pysam read paths**, with a faster columnar route for analytics workloads. Start with a one-line import change, validate parity on your data, then adopt columnar APIs where you iterate millions of records.
 
+## Install
+
+```bash
+pip install bamboo
+# conda (after bioconda merge): conda install -c bioconda -c conda-forge bamboo
+```
+
 ## Quick swap (record iteration)
 
 ```python

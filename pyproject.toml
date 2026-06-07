@@ -20,7 +20,11 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Rust",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 keywords = ["bam", "vcf", "genomics", "hts", "bioinformatics", "arrow"]
@@ -46,13 +50,20 @@ bench = [
 [project.urls]
 Homepage = "https://github.com/donncha/bamboo"
 Repository = "https://github.com/donncha/bamboo"
+Documentation = "https://github.com/donncha/bamboo/blob/main/MIGRATION.md"
 Issues = "https://github.com/donncha/bamboo/issues"
+Changelog = "https://github.com/donncha/bamboo/releases"
 
 [tool.maturin]
 manifest-path = "crates/bamboo-py/Cargo.toml"
 python-source = "python"
 module-name = "bamboo._bamboo"
 features = ["pyo3/extension-module", "htslib"]
+include = [
+    { path = "LICENSE", format = ["sdist", "wheel"] },
+    { path = "README.md", format = "sdist" },
+    { path = "MIGRATION.md", format = "sdist" },
+]
 
 [tool.ruff]
 line-length = 88

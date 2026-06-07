@@ -22,6 +22,7 @@ wheels/
 
 # Virtual environments
 .venv
+.wheel-test-venv/
 venv/
 ENV/
 env/
@@ -29,7 +30,6 @@ env/
 # Rust
 /target/
 **/*.rs.bk
-Cargo.lock
 
 # Maturin / PyO3 build artifacts
 *.pyd

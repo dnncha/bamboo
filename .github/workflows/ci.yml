@@ -37,3 +37,22 @@ jobs:
 
       - name: Python tests
         run: pytest tests/ -q
+
+  wheel-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y libhts-dev
+
+      - name: Verify release wheel builds
+        run: |
+          pip install maturin pyarrow
+          ./scripts/verify_wheel.sh

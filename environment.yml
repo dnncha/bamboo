@@ -1,0 +1,20 @@
+# Conda dev environment (not published to bioconda — use for local builds).
+name: bamboo-dev
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.10
+  - pyarrow>=16
+  - maturin>=1.5,<2
+  - rust
+  - pkg-config
+  - zlib
+  - bzip2
+  - xz
+  - libdeflate
+  - libcurl
+  - pip
+  - pip:
+      - pytest
+      - pysam>=0.22
