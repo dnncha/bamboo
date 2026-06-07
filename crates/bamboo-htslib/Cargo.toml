@@ -14,7 +14,8 @@ htslib = ["dep:rust-htslib"]
 [dependencies]
 bamboo-core = { path = "../bamboo-core" }
 thiserror = "2"
-rust-htslib = { version = "0.47", optional = true }
+# curl disabled: hts-sys omits openssl-sys on Windows but still requires it when curl is on
+rust-htslib = { version = "0.47", optional = true, default-features = false, features = ["bzip2", "lzma"] }
 
 [dev-dependencies]
 bamboo-noodles = { path = "../bamboo-noodles" }

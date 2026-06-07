@@ -18,6 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        if: matrix.target == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -26,8 +30,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          python-version: "3.12"
-          args: --release --strip --features htslib --out dist
+          args: --release --strip --features htslib --out dist -i python3.12
           sccache: "true"
           manylinux: auto
 
@@ -52,8 +55,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          python-version: "3.12"
-          args: --release --strip --features htslib --out dist
+          args: --release --strip --features htslib --out dist -i python3.12
           sccache: "true"
 
       - uses: actions/upload-artifact@v4
@@ -70,11 +72,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set MSVC developer prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Build Windows wheels
         uses: PyO3/maturin-action@v1
         with:
-          python-version: "3.12"
-          args: --release --strip --features htslib --out dist
+          args: --release --strip --features htslib --out dist -i python3.12
           sccache: "true"
 
       - uses: actions/upload-artifact@v4
