@@ -20,12 +20,13 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.12"
 
       - name: Build manylinux wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
+          python-version: "3.12"
           args: --release --strip --features htslib --out dist
           sccache: "true"
           manylinux: auto
@@ -45,12 +46,13 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.12"
 
       - name: Build macOS wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
+          python-version: "3.12"
           args: --release --strip --features htslib --out dist
           sccache: "true"
 
@@ -66,11 +68,12 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: "3.12"
 
       - name: Build Windows wheels
         uses: PyO3/maturin-action@v1
         with:
+          python-version: "3.12"
           args: --release --strip --features htslib --out dist
           sccache: "true"
 
