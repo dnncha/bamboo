@@ -2,8 +2,11 @@ use crate::error::NoodlesError;
 use crate::vcf::{append_record_buf, passes_region_filter_buf};
 use bamboo_core::{VcfScanOptions, VcfTable};
 use noodles::bcf as bcf;
+use noodles::csi::{self as csi, binning_index::index::reference_sequence::index::BinnedIndex};
 use noodles::vcf as vcf;
+use noodles::vcf::variant::Record as _;
 use std::ffi::OsString;
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// High-level BCF reader backed by noodles.
@@ -60,6 +63,55 @@ pub fn scan_bcf(path: &str, options: VcfScanOptions) -> Result<VcfTable, Noodles
 
 pub fn has_csi_index(path: &str) -> bool {
     csi_index_path(path).exists()
+}
+
+/// Build a CSI sidecar for a coordinate-sorted BCF file.
+pub fn index_bcf(path: &Path) -> io::Result<csi::Index> {
+    use csi::binning_index::{
+        index::{
+            header::Builder,
+            reference_sequence::bin::Chunk,
+        },
+        Indexer,
+    };
+    use std::fs::File;
+
+    let file = File::open(path)?;
+    let mut reader = bcf::io::Reader::new(file);
+    let header = reader.read_header()?;
+
+    let mut indexer = Indexer::<BinnedIndex>::default().set_header(Builder::vcf().build());
+
+    let mut record = bcf::Record::default();
+    loop {
+        let start = reader.get_ref().virtual_position();
+        match reader.read_record(&mut record)? {
+            0 => break,
+            _ => {
+                let end = reader.get_ref().virtual_position();
+                let reference_sequence_id = record.reference_sequence_id()?;
+                let start_position = record
+                    .variant_start()
+                    .transpose()?
+                    .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing position"))?;
+                let end_position = record.variant_end(&header)?;
+                indexer.add_record(
+                    Some((reference_sequence_id, start_position, end_position, true)),
+                    Chunk::new(start, end),
+                )?;
+            }
+        }
+    }
+
+    Ok(indexer.build(header.contigs().len()))
+}
+
+/// Write a CSI sidecar for a BCF file.
+pub fn write_bcf_index(path: &Path) -> io::Result<()> {
+    let index = index_bcf(path)?;
+    let mut index_path = path.as_os_str().to_os_string();
+    index_path.push(".csi");
+    csi::fs::write(PathBuf::from(index_path), &index)
 }
 
 fn csi_index_path(path: &str) -> PathBuf {
@@ -176,5 +228,28 @@ mod tests {
         assert_eq!(table.len(), 1);
         assert_eq!(table.chrom[0], "chr1");
         assert_eq!(table.pos[0], 100);
+    }
+
+    #[test]
+    fn indexed_bcf_region_matches_linear_scan() {
+        let dir = tempdir().unwrap();
+        let path = tiny_bcf_path(dir.path());
+        write_tiny_bcf(&path).unwrap();
+        super::write_bcf_index(&path).unwrap();
+
+        let options = VcfScanOptions {
+            region: Some(FetchRegion {
+                reference_name: "chr1".to_string(),
+                start: Some(99),
+                end: Some(200),
+            }),
+            ..Default::default()
+        };
+        let indexed = scan_bcf(path.to_str().unwrap(), options.clone()).unwrap();
+        let linear = scan_bcf_linear(path.to_str().unwrap(), &options).unwrap();
+        assert_eq!(indexed.chrom, linear.chrom);
+        assert_eq!(indexed.pos, linear.pos);
+        assert_eq!(indexed.reference, linear.reference);
+        assert_eq!(indexed.alt, linear.alt);
     }
 }

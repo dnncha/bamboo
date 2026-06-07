@@ -244,6 +244,11 @@ pub fn write_tiny_fasta(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// Write a CSI index for a tiny BCF fixture.
+pub fn write_tiny_bcf_index(bcf_path: &Path) -> io::Result<()> {
+    crate::bcf::write_bcf_index(bcf_path)
+}
+
 /// Write a tiny BCF fixture equivalent to `tiny.vcf`.
 pub fn write_tiny_bcf(path: &Path) -> io::Result<()> {
     use noodles::bcf as bcf;
@@ -383,4 +388,100 @@ pub fn write_bench_bam_index(bam_path: &Path) -> io::Result<()> {
     let index = bam::fs::index(bam_path)?;
     let index_path = bam_path.with_extension("bam.bai");
     bam::bai::fs::write(index_path, &index)
+}
+
+const BENCH_CRAM_REFERENCES: [(&str, usize); 5] = [
+    ("chr1", 10_000_000),
+    ("chr2", 10_000_000),
+    ("chr3", 10_000_000),
+    ("chr4", 10_000_000),
+    ("chr5", 10_000_000),
+];
+
+/// Write a coordinate-sorted synthetic CRAM for benchmarks.
+pub fn write_bench_cram(path: &Path, record_count: usize) -> io::Result<()> {
+    use noodles::cram as cram;
+    use noodles::fasta as fasta;
+    use noodles::fasta::record::{Definition, Sequence as FastaSequence};
+    use noodles::sam::alignment::io::Write as _;
+
+    let reference_sequences = BENCH_CRAM_REFERENCES
+        .iter()
+        .map(|(name, length)| {
+            fasta::Record::new(
+                Definition::new(*name, None),
+                FastaSequence::from(vec![b'N'; *length]),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let header = coordinate_sorted_header(&BENCH_CRAM_REFERENCES)?;
+    let repository = fasta::Repository::new(reference_sequences);
+    let mut writer = cram::io::writer::Builder::default()
+        .set_reference_sequence_repository(repository)
+        .build_from_path(path)?;
+    writer.write_header(&header)?;
+
+    let sequence = Sequence::from(vec![b'A'; BENCH_READ_LENGTH]);
+    let quality_scores = QualityScores::from(vec![b'!'; BENCH_READ_LENGTH]);
+    let cigar: Cigar = [Op::new(Kind::Match, BENCH_READ_LENGTH)]
+        .into_iter()
+        .collect();
+
+    let refs = BENCH_CRAM_REFERENCES.len();
+    let base_per_ref = record_count / refs;
+    let remainder = record_count % refs;
+    let mut global_index = 0usize;
+
+    for reference_sequence_id in 0..refs {
+        let records_for_ref = base_per_ref + usize::from(reference_sequence_id < remainder);
+        for offset in 0..records_for_ref {
+            let alignment_start = 1_000 + offset * 250;
+            let mapping_quality = ((global_index % 60) + 1) as u8;
+            let name = format!("bench_read_{global_index:08}");
+
+            let record = RecordBuf::builder()
+                .set_name(name.as_str())
+                .set_flags(Flags::empty())
+                .set_reference_sequence_id(reference_sequence_id)
+                .set_alignment_start(
+                    noodles::core::Position::try_from(alignment_start)
+                        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err.to_string()))?,
+                )
+                .set_mapping_quality(
+                    MappingQuality::try_from(mapping_quality)
+                        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err.to_string()))?,
+                )
+                .set_cigar(cigar.clone())
+                .set_sequence(sequence.clone())
+                .set_quality_scores(quality_scores.clone())
+                .build();
+
+            writer.write_alignment_record(&header, &record)?;
+            global_index += 1;
+        }
+    }
+
+    writer.try_finish(&header)?;
+    Ok(())
+}
+
+/// Write a CRAI index for a benchmark CRAM.
+pub fn write_bench_cram_index(cram_path: &Path) -> io::Result<()> {
+    write_tiny_cram_index(cram_path)
+}
+
+/// Write a FASTA reference for benchmark CRAMs.
+pub fn write_bench_fasta(path: &Path) -> io::Result<()> {
+    use noodles::fasta as fasta;
+    use noodles::fasta::record::{Definition, Sequence};
+
+    let mut writer = fasta::io::writer::Builder::default().build_from_path(path)?;
+    for (name, length) in BENCH_CRAM_REFERENCES {
+        writer.write_record(&fasta::Record::new(
+            Definition::new(name, None),
+            Sequence::from(vec![b'N'; length]),
+        ))?;
+    }
+    Ok(())
 }

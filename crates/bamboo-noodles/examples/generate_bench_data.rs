@@ -1,6 +1,9 @@
 //! Generate synthetic benchmark BAMs under `benchmarks/data/`.
 
-use bamboo_noodles::fixtures::{write_bench_bam, write_bench_bam_index};
+use bamboo_noodles::fixtures::{
+    write_bench_bam, write_bench_bam_index, write_bench_cram, write_bench_cram_index,
+    write_bench_fasta,
+};
 use std::env;
 use std::path::PathBuf;
 
@@ -21,10 +24,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     write_bench_bam(&bam_path, record_count)?;
     write_bench_bam_index(&bam_path)?;
 
+    let cram_path = root.join(format!("bench_{record_count}.cram"));
+    write_bench_cram(&cram_path, record_count)?;
+    write_bench_cram_index(&cram_path)?;
+
+    let fasta_path = root.join(format!("bench_{record_count}.fasta"));
+    write_bench_fasta(&fasta_path)?;
+
     println!(
-        "Wrote {} and {}",
+        "Wrote {}, {}, {}, {}, and {}",
         bam_path.display(),
-        bam_path.with_extension("bam.bai").display()
+        bam_path.with_extension("bam.bai").display(),
+        cram_path.display(),
+        format!("{}.crai", cram_path.display()),
+        fasta_path.display()
     );
     Ok(())
 }

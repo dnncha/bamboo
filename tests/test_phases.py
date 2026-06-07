@@ -65,12 +65,28 @@ def test_phase3_bcf_reader(tiny_bcf_path: Path) -> None:
     assert table.num_rows == 2
 
 
+def test_phase3_bcf_indexed_fetch(tiny_bcf_with_index: Path) -> None:
+    with bamboo.VariantFile(str(tiny_bcf_with_index)) as bcf:
+        assert bcf.has_index()
+        records = bcf.fetch(region="chr1:100-200")
+    assert len(records) == 1
+    assert records[0].chrom == "chr1"
+    assert records[0].pos == 100
+
+
 @pytest.fixture(scope="session")
 def tiny_bcf_path() -> Path:
     path = Path(__file__).resolve().parent / "data" / "tiny.bcf"
     if not path.exists():
         pytest.skip("missing tests/data/tiny.bcf")
     return path
+
+
+@pytest.fixture(scope="session")
+def tiny_bcf_with_index(tiny_bcf_path: Path) -> Path:
+    if not Path(f"{tiny_bcf_path}.csi").exists():
+        pytest.skip("missing tests/data/tiny.bcf.csi")
+    return tiny_bcf_path
 
 
 def test_phase3_vcf_reader(tiny_vcf_path: Path) -> None:

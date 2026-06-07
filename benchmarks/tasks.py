@@ -466,7 +466,134 @@ def task_columnar_materialize(path: Path, backend: str) -> Callable[[], int]:
     raise ValueError(f"unsupported backend '{backend}'")
 
 
-TASK_SPECS: list[tuple[str, Callable[[Path, str], Callable[[], int]]]] = [
+def task_cram_columnar(
+    cram_path: Path,
+    backend: str,
+    *,
+    reference_path: Path | None = None,
+) -> Callable[[], int]:
+    if backend == "bamboo":
+        import bamboo as bm
+
+        def run() -> int:
+            table = bm.read_cram_columns(
+                str(cram_path),
+                columns=ARROW_COLUMNS,
+                reference_filename=str(reference_path) if reference_path else None,
+            )
+            return table.num_rows
+
+        return run
+
+    if backend == "pysam":
+        import pysam
+
+        def run() -> int:
+            qname: list[str | None] = []
+            rname: list[str | None] = []
+            pos: list[int | None] = []
+            mapq: list[int | None] = []
+            cigar: list[str] = []
+            kwargs: dict[str, str] = {}
+            if reference_path is not None:
+                kwargs["reference_filename"] = str(reference_path)
+            with pysam.AlignmentFile(str(cram_path), "rc", **kwargs) as cram:
+                for read in cram:
+                    qname.append(read.query_name)
+                    rname.append(read.reference_name)
+                    pos.append(read.reference_start)
+                    mapq.append(read.mapping_quality)
+                    cigar.append(read.cigarstring)
+            table = pa.table(
+                {
+                    "qname": qname,
+                    "rname": rname,
+                    "pos": pos,
+                    "mapq": mapq,
+                    "cigar": cigar,
+                }
+            )
+            return table.num_rows
+
+        return run
+
+    if backend == "samtools":
+        def run() -> int:
+            raise RuntimeError("samtools has no native CRAM columnar export")
+
+        return run
+
+    raise ValueError(f"unsupported backend '{backend}'")
+
+
+def task_cram_region_columnar(
+    cram_path: Path,
+    backend: str,
+    *,
+    reference_path: Path | None = None,
+    region: str = REGION,
+) -> Callable[[], int]:
+    if backend == "bamboo":
+        import bamboo as bm
+
+        def run() -> int:
+            table = bm.read_cram_columns(
+                str(cram_path),
+                columns=ARROW_COLUMNS,
+                region=region,
+                reference_filename=str(reference_path) if reference_path else None,
+            )
+            return table.num_rows
+
+        return run
+
+    if backend == "pysam":
+        import pysam
+
+        contig, interval = region.split(":", 1)
+        start_s, end_s = interval.split("-", 1)
+        start = max(int(start_s) - 1, 0)
+        end = int(end_s)
+
+        def run() -> int:
+            qname: list[str | None] = []
+            rname: list[str | None] = []
+            pos: list[int | None] = []
+            mapq: list[int | None] = []
+            cigar: list[str] = []
+            kwargs: dict[str, str] = {}
+            if reference_path is not None:
+                kwargs["reference_filename"] = str(reference_path)
+            with pysam.AlignmentFile(str(cram_path), "rc", **kwargs) as cram:
+                for read in cram.fetch(contig, start, end):
+                    qname.append(read.query_name)
+                    rname.append(read.reference_name)
+                    pos.append(read.reference_start)
+                    mapq.append(read.mapping_quality)
+                    cigar.append(read.cigarstring)
+            table = pa.table(
+                {
+                    "qname": qname,
+                    "rname": rname,
+                    "pos": pos,
+                    "mapq": mapq,
+                    "cigar": cigar,
+                }
+            )
+            return table.num_rows
+
+        return run
+
+    if backend == "samtools":
+        def run() -> int:
+            raise RuntimeError("samtools has no native CRAM region columnar export")
+
+        return run
+
+    raise ValueError(f"unsupported backend '{backend}'")
+
+
+BAM_TASK_SPECS: list[tuple[str, Callable[[Path, str], Callable[[], int]]]] = [
     ("count_records", task_count_records),
     ("iterate_materialize", task_iterate_materialize),
     ("columnar_materialize", task_columnar_materialize),
@@ -477,3 +604,10 @@ TASK_SPECS: list[tuple[str, Callable[[Path, str], Callable[[], int]]]] = [
     ("arrow_export", task_arrow_export),
     ("write_roundtrip", task_write_roundtrip),
 ]
+
+CRAM_TASK_SPECS: list[tuple[str, Callable[..., Callable[[], int]]]] = [
+    ("cram_columnar", task_cram_columnar),
+    ("cram_region_columnar", task_cram_region_columnar),
+]
+
+TASK_SPECS = BAM_TASK_SPECS

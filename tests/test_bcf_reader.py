@@ -32,6 +32,13 @@ def tiny_bcf_path() -> Path:
 
 
 @pytest.fixture(scope="session")
+def tiny_bcf_with_index(tiny_bcf_path: Path) -> Path:
+    if not Path(f"{tiny_bcf_path}.csi").exists():
+        pytest.skip("missing tests/data/tiny.bcf.csi")
+    return tiny_bcf_path
+
+
+@pytest.fixture(scope="session")
 def tiny_vcf_path() -> Path:
     path = Path(__file__).parent / "data" / "tiny.vcf"
     if not path.exists():
@@ -72,6 +79,31 @@ def test_bcf_fetch_matches_pysam(tiny_bcf_path: Path) -> None:
             (rec.chrom, rec.pos, rec.ref, rec.alts[0] if rec.alts else "", rec.qual)
             for rec in bcf
             if rec.chrom == contig and start <= rec.pos <= end
+        ]
+
+    assert bamboo_rows == pysam_rows
+
+
+def test_bcf_has_csi_index(tiny_bcf_with_index: Path) -> None:
+    with bamboo.VariantFile(str(tiny_bcf_with_index)) as bcf:
+        assert bcf.has_index()
+
+
+def test_bcf_indexed_fetch_matches_pysam(tiny_bcf_with_index: Path) -> None:
+    region = "chr1:100-200"
+    contig, interval = region.split(":", 1)
+    start_s, end_s = interval.split("-", 1)
+    start = max(int(start_s) - 1, 0)
+    end = int(end_s)
+
+    with bamboo.VariantFile(str(tiny_bcf_with_index)) as bcf:
+        assert bcf.has_index()
+        bamboo_rows = [_variant_tuple(record) for record in bcf.fetch(region=region)]
+
+    with pysam.VariantFile(str(tiny_bcf_with_index)) as bcf:
+        pysam_rows = [
+            (rec.chrom, rec.pos, rec.ref, rec.alts[0] if rec.alts else "", rec.qual)
+            for rec in bcf.fetch(contig, start, end)
         ]
 
     assert bamboo_rows == pysam_rows
