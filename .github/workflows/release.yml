@@ -113,6 +113,8 @@ jobs:
     name: Publish to PyPI
     runs-on: ubuntu-latest
     needs: [linux, macos, sdist]
+    permissions:
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
