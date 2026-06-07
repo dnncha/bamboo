@@ -593,6 +593,91 @@ def task_cram_region_columnar(
     raise ValueError(f"unsupported backend '{backend}'")
 
 
+def _parse_region(region: str) -> tuple[str, int, int]:
+    contig, interval = region.split(":", 1)
+    start_s, end_s = interval.split("-", 1)
+    start = max(int(start_s) - 1, 0)
+    end = int(end_s)
+    return contig, start, end
+
+
+def task_bam_region_pileup(
+    bam_path: Path,
+    backend: str,
+    *,
+    region: str = REGION,
+) -> Callable[[], int]:
+    contig, start, end = _parse_region(region)
+
+    if backend == "bamboo":
+        import bamboo as bm
+
+        def run() -> int:
+            with bm.AlignmentFile(str(bam_path)) as bam:
+                return sum(1 for _ in bam.pileup(contig, start, end))
+
+        return run
+
+    if backend == "pysam":
+        import pysam
+
+        def run() -> int:
+            with pysam.AlignmentFile(str(bam_path), "rb") as bam:
+                return sum(1 for _ in bam.pileup(contig, start, end))
+
+        return run
+
+    if backend == "samtools":
+        def run() -> int:
+            raise RuntimeError("samtools has no native Python pileup iterator")
+
+        return run
+
+    raise ValueError(f"unsupported backend '{backend}'")
+
+
+def task_cram_region_pileup(
+    cram_path: Path,
+    backend: str,
+    *,
+    reference_path: Path | None = None,
+    region: str = REGION,
+) -> Callable[[], int]:
+    contig, start, end = _parse_region(region)
+
+    if backend == "bamboo":
+        import bamboo as bm
+
+        def run() -> int:
+            kwargs = {}
+            if reference_path is not None:
+                kwargs["reference_filename"] = str(reference_path)
+            with bm.CramFile(str(cram_path), **kwargs) as cram:
+                return sum(1 for _ in cram.pileup(contig, start, end))
+
+        return run
+
+    if backend == "pysam":
+        import pysam
+
+        def run() -> int:
+            kwargs: dict[str, str] = {}
+            if reference_path is not None:
+                kwargs["reference_filename"] = str(reference_path)
+            with pysam.AlignmentFile(str(cram_path), "rc", **kwargs) as cram:
+                return sum(1 for _ in cram.pileup(contig, start, end))
+
+        return run
+
+    if backend == "samtools":
+        def run() -> int:
+            raise RuntimeError("samtools has no native Python pileup iterator")
+
+        return run
+
+    raise ValueError(f"unsupported backend '{backend}'")
+
+
 BAM_TASK_SPECS: list[tuple[str, Callable[[Path, str], Callable[[], int]]]] = [
     ("count_records", task_count_records),
     ("iterate_materialize", task_iterate_materialize),
@@ -601,6 +686,7 @@ BAM_TASK_SPECS: list[tuple[str, Callable[[Path, str], Callable[[], int]]]] = [
     ("region_fetch_arrow", task_region_fetch_arrow),
     ("region_fetch_bulk", task_region_fetch_bulk),
     ("region_fetch", task_region_fetch),
+    ("region_pileup", task_bam_region_pileup),
     ("arrow_export", task_arrow_export),
     ("write_roundtrip", task_write_roundtrip),
 ]
@@ -608,6 +694,7 @@ BAM_TASK_SPECS: list[tuple[str, Callable[[Path, str], Callable[[], int]]]] = [
 CRAM_TASK_SPECS: list[tuple[str, Callable[..., Callable[[], int]]]] = [
     ("cram_columnar", task_cram_columnar),
     ("cram_region_columnar", task_cram_region_columnar),
+    ("cram_region_pileup", task_cram_region_pileup),
 ]
 
 TASK_SPECS = BAM_TASK_SPECS

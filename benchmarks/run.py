@@ -174,6 +174,9 @@ def main() -> int:
             if task_name == "write_roundtrip" and backend == "samtools":
                 print("  - samtools: skipped (write not benchmarked)")
                 continue
+            if task_name == "region_pileup" and backend == "samtools":
+                print("  - samtools: skipped (no region_pileup)")
+                continue
 
             try:
                 fn = task_fn(bam_path, backend)
@@ -212,7 +215,6 @@ def main() -> int:
             if backend == "samtools":
                 print(f"  - samtools: skipped (no {task_name})")
                 continue
-
             try:
                 fn = task_fn(
                     cram_path,

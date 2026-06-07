@@ -27,8 +27,12 @@ pub fn pileup_region(
     contig: &str,
     start: u32,
     end: u32,
+    reference_filename: Option<&str>,
 ) -> Result<Vec<PileupColumn>, HtslibError> {
     let mut reader = bam::IndexedReader::from_path(path)?;
+    if let Some(reference_path) = reference_filename {
+        reader.set_reference(reference_path)?;
+    }
     reader.fetch((contig, start as i64, end as i64))?;
 
     let target_names = reader
@@ -77,8 +81,19 @@ pub fn pileup_region(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bamboo_noodles::fixtures::{tiny_bam_path, write_tiny_bam, write_tiny_bam_index};
+    use bamboo_noodles::fixtures::{
+        tiny_bam_path, tiny_cram_path, tiny_fasta_path, write_tiny_bam, write_tiny_bam_index,
+        write_tiny_cram, write_tiny_cram_index, write_tiny_fasta,
+    };
     use tempfile::tempdir;
+
+    fn assert_read1_pileup(columns: &[PileupColumn]) {
+        assert_eq!(columns.len(), 6);
+        assert_eq!(columns[0].position, 99);
+        assert_eq!(columns[0].depth, 1);
+        assert_eq!(columns[0].reads[0].query_name.as_deref(), Some("read1"));
+        assert_eq!(columns.last().map(|column| column.position), Some(104));
+    }
 
     #[test]
     fn pileup_region_reports_alignment_overlapping_interval() {
@@ -87,11 +102,43 @@ mod tests {
         write_tiny_bam(&bam_path).unwrap();
         write_tiny_bam_index(&bam_path).unwrap();
 
-        let columns = pileup_region(bam_path.to_str().unwrap(), "chr1", 99, 101).unwrap();
-        assert_eq!(columns.len(), 6);
-        assert_eq!(columns[0].position, 99);
-        assert_eq!(columns[0].depth, 1);
-        assert_eq!(columns[0].reads[0].query_name.as_deref(), Some("read1"));
-        assert_eq!(columns.last().map(|column| column.position), Some(104));
+        let columns = pileup_region(bam_path.to_str().unwrap(), "chr1", 99, 101, None).unwrap();
+        assert_read1_pileup(&columns);
+    }
+
+    #[test]
+    fn cram_pileup_with_external_reference_matches_bam() {
+        let dir = tempdir().unwrap();
+        let bam_path = tiny_bam_path(dir.path());
+        let cram_path = tiny_cram_path(dir.path());
+        let fasta_path = tiny_fasta_path(dir.path());
+        write_tiny_bam(&bam_path).unwrap();
+        write_tiny_bam_index(&bam_path).unwrap();
+        write_tiny_cram(&cram_path).unwrap();
+        write_tiny_cram_index(&cram_path).unwrap();
+        write_tiny_fasta(&fasta_path).unwrap();
+
+        let bam_columns =
+            pileup_region(bam_path.to_str().unwrap(), "chr1", 99, 101, None).unwrap();
+        let cram_columns = pileup_region(
+            cram_path.to_str().unwrap(),
+            "chr1",
+            99,
+            101,
+            Some(fasta_path.to_str().unwrap()),
+        )
+        .unwrap();
+
+        assert_read1_pileup(&cram_columns);
+        assert_eq!(
+            cram_columns
+                .iter()
+                .map(|column| (column.position, column.depth))
+                .collect::<Vec<_>>(),
+            bam_columns
+                .iter()
+                .map(|column| (column.position, column.depth))
+                .collect::<Vec<_>>()
+        );
     }
 }

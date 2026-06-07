@@ -121,10 +121,11 @@ pub fn pileup_region(
     contig: &str,
     start: u32,
     end: u32,
+    reference_filename: Option<&str>,
 ) -> PyResult<PyPileupIterator> {
     #[cfg(feature = "htslib")]
     {
-        let columns = bamboo_htslib::pileup_region(path, contig, start, end)
+        let columns = bamboo_htslib::pileup_region(path, contig, start, end, reference_filename)
             .map_err(htslib_to_py_err)?
             .into_iter()
             .map(|column| PyPileupColumn {
@@ -154,7 +155,7 @@ pub fn pileup_region(
 
     #[cfg(not(feature = "htslib"))]
     {
-        let _ = (path, contig, start, end);
+        let _ = (path, contig, start, end, reference_filename);
         Err(PyRuntimeError::new_err(
             "pileup requires Bamboo built with the 'htslib' feature",
         ))

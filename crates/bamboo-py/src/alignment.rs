@@ -418,7 +418,7 @@ impl PyAlignmentFile {
             (contig, start, stop)
         };
 
-        pileup::pileup_region(reader.uri(), &reference_name, region_start, region_end)
+        pileup::pileup_region(reader.uri(), &reference_name, region_start, region_end, None)
     }
 
     fn filename(&self) -> String {

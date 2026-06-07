@@ -180,3 +180,19 @@ def test_phase3_htslib_capability_probes() -> None:
     assert bamboo.primary_backend() == "noodles"
     assert isinstance(bamboo.htslib_available(), bool)
     assert isinstance(bamboo.pileup_available(), bool)
+
+
+def test_phase3_cram_pileup_with_reference(
+    tiny_cram_with_index: Path,
+    tiny_fasta_with_index: Path,
+) -> None:
+    if not bamboo.pileup_available():
+        pytest.skip("pileup requires htslib build")
+
+    with bamboo.CramFile(
+        str(tiny_cram_with_index),
+        reference_filename=str(tiny_fasta_with_index),
+    ) as cram:
+        columns = list(cram.pileup(region="chr1:100-101"))
+    assert len(columns) >= 1
+    assert columns[0].n >= 1
