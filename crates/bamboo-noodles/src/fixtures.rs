@@ -91,6 +91,7 @@ pub fn tiny_vcf_bytes() -> io::Result<Vec<u8>> {
         b"##fileformat=VCFv4.2\n\
 ##contig=<ID=chr1,length=1000>\n\
 ##contig=<ID=chr2,length=1000>\n\
+##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency\">\n\
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
 chr1\t100\t.\tA\tG\t60\tPASS\t.\n\
 chr2\t250\trs1\tC\tT\t30\tPASS\tAF=0.5\n"
@@ -111,6 +112,11 @@ pub fn tiny_vcf_path(dir: &Path) -> PathBuf {
 /// Path helper for a bgzipped tiny VCF fixture.
 pub fn tiny_vcf_gz_path(dir: &Path) -> PathBuf {
     dir.join("tiny.vcf.gz")
+}
+
+/// Path helper for a tiny BCF fixture.
+pub fn tiny_bcf_path(dir: &Path) -> PathBuf {
+    dir.join("tiny.bcf")
 }
 
 /// Path helper for a tiny CRAM fixture.
@@ -235,6 +241,36 @@ pub fn write_tiny_fasta(path: &Path) -> io::Result<()> {
     for record in records {
         writer.write_record(&record)?;
     }
+    Ok(())
+}
+
+/// Write a tiny BCF fixture equivalent to `tiny.vcf`.
+pub fn write_tiny_bcf(path: &Path) -> io::Result<()> {
+    use noodles::bcf as bcf;
+    use noodles::vcf as vcf;
+    use noodles::vcf::variant::io::Write as _;
+
+    let vcf_path = path
+        .parent()
+        .map(|dir| dir.join("tiny.vcf"))
+        .filter(|candidate| candidate.exists())
+        .unwrap_or_else(|| path.with_extension("vcf"));
+
+    if !vcf_path.exists() {
+        write_tiny_vcf(&vcf_path)?;
+    }
+
+    let mut vcf_reader = vcf::io::reader::Builder::default().build_from_path(&vcf_path)?;
+    let header = vcf_reader.read_header()?;
+
+    let mut bcf_writer = bcf::io::writer::Builder::default().build_from_path(path)?;
+    bcf_writer.write_header(&header)?;
+
+    for result in vcf_reader.record_bufs(&header) {
+        let record = result?;
+        bcf_writer.write_variant_record(&header, &record)?;
+    }
+
     Ok(())
 }
 

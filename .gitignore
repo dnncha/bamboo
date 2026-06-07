@@ -71,6 +71,7 @@ htmlcov/
 *.vcf.gz.tbi
 *.bcf
 *.bcf.csi
+!tests/data/*.bcf
 *.fastq*
 *.fq*
 

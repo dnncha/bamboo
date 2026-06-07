@@ -29,6 +29,7 @@ fn _bamboo(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVariantFile>()?;
     m.add_class::<PyVariantRecord>()?;
     m.add_function(wrap_pyfunction!(read_vcf_table, m)?)?;
+    m.add_function(wrap_pyfunction!(read_bcf_table, m)?)?;
     Ok(())
 }
 
@@ -40,7 +41,18 @@ fn read_vcf_table(
     columns: Option<Vec<String>>,
     region: Option<String>,
 ) -> PyResult<PyObject> {
-    variant::read_vcf_table_impl(py, path, columns, region)
+    variant::read_variant_table_impl(py, path, columns, region)
+}
+
+#[pyfunction]
+#[pyo3(signature = (path, *, columns=None, region=None))]
+fn read_bcf_table(
+    py: Python<'_>,
+    path: String,
+    columns: Option<Vec<String>>,
+    region: Option<String>,
+) -> PyResult<PyObject> {
+    variant::read_variant_table_impl(py, path, columns, region)
 }
 
 #[pyfunction]

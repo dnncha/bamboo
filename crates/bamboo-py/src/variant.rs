@@ -1,7 +1,7 @@
 use crate::errors;
 use crate::vcf_table::vcf_table_to_pyarrow;
 use bamboo_core::{FetchRegion, VcfColumn, VcfScanOptions};
-use bamboo_noodles::{scan_vcf, VcfReader};
+use bamboo_noodles::{scan_bcf, scan_vcf, VariantReader};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -64,14 +64,14 @@ impl PyVariantRecord {
 
 #[pyclass(name = "VariantFile")]
 pub struct PyVariantFile {
-    reader: VcfReader,
+    reader: VariantReader,
 }
 
 #[pymethods]
 impl PyVariantFile {
     #[new]
     fn new(path: String) -> PyResult<Self> {
-        let reader = VcfReader::open(&path).map_err(errors::noodles_to_py_err)?;
+        let reader = VariantReader::open(&path).map_err(errors::noodles_to_py_err)?;
         Ok(Self { reader })
     }
 
@@ -172,14 +172,21 @@ impl PyVariantFile {
     }
 }
 
-pub(crate) fn read_vcf_table_impl(
+pub(crate) fn read_variant_table_impl(
     py: Python<'_>,
     path: String,
     columns: Option<Vec<String>>,
     region: Option<String>,
 ) -> PyResult<PyObject> {
     let options = build_vcf_scan_options(columns, region)?;
-    let table = scan_vcf(&path, options).map_err(errors::noodles_to_py_err)?;
+    let table = if path
+        .rsplit_once('.')
+        .is_some_and(|(_, extension)| extension.eq_ignore_ascii_case("bcf"))
+    {
+        scan_bcf(&path, options).map_err(errors::noodles_to_py_err)?
+    } else {
+        scan_vcf(&path, options).map_err(errors::noodles_to_py_err)?
+    };
     vcf_table_to_pyarrow(py, &table)
 }
 

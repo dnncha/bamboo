@@ -124,7 +124,7 @@ fn open_reader(path: &str) -> Result<vcf::io::Reader<Box<dyn BufRead>>, NoodlesE
         .map_err(NoodlesError::from)
 }
 
-fn passes_region_filter_buf(
+pub(crate) fn passes_region_filter_buf(
     record: &vcf::variant::RecordBuf,
     region: &Option<FetchRegion>,
 ) -> bool {
@@ -158,7 +158,7 @@ fn region_contains_position(region: &FetchRegion, pos: i64) -> bool {
     true
 }
 
-fn append_record_buf(
+pub(crate) fn append_record_buf(
     table: &mut VcfTable,
     record: &vcf::variant::RecordBuf,
     options: &VcfScanOptions,
@@ -167,7 +167,7 @@ fn append_record_buf(
     append_fields(table, &fields, options);
 }
 
-fn append_vcf_record(
+pub(crate) fn append_vcf_record(
     table: &mut VcfTable,
     header: &vcf::Header,
     record: &vcf::Record,

@@ -11,6 +11,11 @@ pub fn is_available() -> bool {
     false
 }
 
+/// Returns whether pileup is available through htslib.
+pub fn pileup_available() -> bool {
+    false
+}
+
 /// Recommended backend for alignment I/O today.
 pub fn primary_backend() -> &'static str {
     "noodles"

@@ -1,6 +1,7 @@
 ##fileformat=VCFv4.2
 ##contig=<ID=chr1,length=1000>
 ##contig=<ID=chr2,length=1000>
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency">
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
 chr1	100	.	A	G	60	PASS	.
 chr2	250	rs1	C	T	30	PASS	AF=0.5

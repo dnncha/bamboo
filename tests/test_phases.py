@@ -57,6 +57,22 @@ def tiny_vcf_gz_with_index() -> Path:
     return path
 
 
+def test_phase3_bcf_reader(tiny_bcf_path: Path) -> None:
+    pa = pytest.importorskip("pyarrow")
+
+    table = bamboo.read_bcf_table(str(tiny_bcf_path), columns=["chrom", "pos", "ref", "alt"])
+    assert isinstance(table, pa.Table)
+    assert table.num_rows == 2
+
+
+@pytest.fixture(scope="session")
+def tiny_bcf_path() -> Path:
+    path = Path(__file__).resolve().parent / "data" / "tiny.bcf"
+    if not path.exists():
+        pytest.skip("missing tests/data/tiny.bcf")
+    return path
+
+
 def test_phase3_vcf_reader(tiny_vcf_path: Path) -> None:
     pa = pytest.importorskip("pyarrow")
 
@@ -99,6 +115,7 @@ def test_phase3_htslib_stub_present() -> None:
     text = lib.read_text()
     assert "phase-2" in text
     assert "noodles" in text
+    assert "pileup_available" in text
 
 
 def test_phase4_polars_adapter(tiny_bam_path: Path) -> None:

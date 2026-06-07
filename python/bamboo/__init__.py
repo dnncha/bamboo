@@ -19,6 +19,7 @@ try:
         VariantRecord,
         __version__ as _rust_version,
         read_bam_table,
+        read_bcf_table,
         read_columns,
         read_cram_columns,
         read_vcf_table,
@@ -34,6 +35,7 @@ except ImportError:
     VariantFile = None  # type: ignore[assignment,misc]
     VariantRecord = None  # type: ignore[assignment,misc]
     read_bam_table = None  # type: ignore[assignment,misc]
+    read_bcf_table = None  # type: ignore[assignment,misc]
     read_columns = None  # type: ignore[assignment,misc]
     read_cram_columns = None  # type: ignore[assignment,misc]
     read_vcf_table = None  # type: ignore[assignment,misc]
@@ -55,6 +57,7 @@ __all__ = [
     "VariantRecord",
     "compat",
     "read_bam_table",
+    "read_bcf_table",
     "read_columns",
     "read_cram_columns",
     "read_vcf_table",
