@@ -28,7 +28,7 @@ requirements:
   build:
     - {{ compiler('rust') }}
     - {{ compiler('c') }}
-    - {{ compiler('cxx') }}
+    - {{ compiler('cxx') }}  # [linux]
     - {{ stdlib('c') }}
     - clangdev >=18,<19
     - llvm-tools >=18,<19
