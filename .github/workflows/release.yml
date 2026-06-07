@@ -128,10 +128,9 @@ jobs:
       - name: List artifacts
         run: ls -lh dist/
 
-      - name: Publish
-        uses: PyO3/maturin-action@v1
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          command: upload
-          args: --non-interactive --skip-existing dist/**
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
+          packages-dir: dist/
