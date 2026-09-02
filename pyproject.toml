@@ -48,11 +48,11 @@ bench = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/donncha/bamboo"
-Repository = "https://github.com/donncha/bamboo"
-Documentation = "https://github.com/donncha/bamboo/blob/main/MIGRATION.md"
-Issues = "https://github.com/donncha/bamboo/issues"
-Changelog = "https://github.com/donncha/bamboo/releases"
+Homepage = "https://github.com/dnncha/bamboo"
+Repository = "https://github.com/dnncha/bamboo"
+Documentation = "https://github.com/dnncha/bamboo/blob/main/MIGRATION.md"
+Issues = "https://github.com/dnncha/bamboo/issues"
+Changelog = "https://github.com/dnncha/bamboo/releases"
 
 [tool.maturin]
 manifest-path = "crates/bamboo-py/Cargo.toml"
