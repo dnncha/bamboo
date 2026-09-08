@@ -1,16 +1,16 @@
-# Migrating from pysam to Bamboo
+# Migrating selected pysam read paths to Bamboo
 
-Bamboo is designed as a **drop-in replacement for common pysam read paths**, with a faster columnar route for analytics workloads. Start with a one-line import change, validate parity on your data, then adopt columnar APIs where you iterate millions of records.
+Bamboo's compatibility module re-exports a subset of alignment classes and
+helpers. An import change can be a useful first experiment, but differences in
+headers, methods, supported modes, and record mutation often require code changes.
 
-## Install
+## Install and check scope
 
-```bash
-pip install bamboo-hts
-import bamboo  # module name unchanged
-# conda (after bioconda merge): conda install -c bioconda -c conda-forge bamboo-hts
-```
+Follow [installation and platform support](README.md#install), then list the
+pysam methods and fields your workflow actually uses. Compare those against the
+mapping below before editing an analysis.
 
-## Quick swap (record iteration)
+## Compare a record-iteration path
 
 ```python
 # before
@@ -20,7 +20,7 @@ with pysam.AlignmentFile("sample.bam", "rb") as bam:
     for read in bam.fetch("chr1", 1_000_000, 5_000_000):
         print(read.query_name, read.reference_start, read.flag)
 
-# after — compat shim, same call patterns
+# candidate — compare outputs before adopting
 from bamboo.compat import pysam
 
 with pysam.AlignmentFile("sample.bam") as bam:
@@ -53,7 +53,7 @@ with bm.AlignmentFile("sample.bam") as bam:
 | `read.cigarstring` | `read.cigarstring` | |
 | `read.flag` | `read.flag` | |
 | `read.is_paired`, `is_unmapped`, `is_reverse` | same | |
-| `read.get_tag("NM")` | `read.get_tag("NM")` | Tags load when requested via columnar scan; see below |
+| `read.get_tag("NM")` | `read.get_tag("NM")` | Record tag access; select exported tags separately in columnar scans |
 | `bam.fetch(contig, start, end)` | `bam.fetch(contig, start, end)` or `bam.fetch(region="chr1:1-100")` | Region string is samtools-style (1-based start in string) |
 | `bam.count()` | `bam.count()` | |
 | `bam.pileup(...)` | `bam.pileup(..., reads=False)` for depth-only | Requires htslib build; `reads=False` skips per-read materialization |
@@ -66,7 +66,7 @@ with bm.AlignmentFile("sample.bam") as bam:
 **Keep record iteration** when you:
 - Process a small number of alignments
 - Need full read objects with complex per-record logic
-- Are porting existing pysam code verbatim (use `bamboo.compat.pysam`)
+- Need a supported record interface while porting existing code
 
 **Switch to columnar** when you:
 - Filter or aggregate over millions of reads (QC, coverage summaries, cohort stats)
@@ -76,7 +76,7 @@ with bm.AlignmentFile("sample.bam") as bam:
 ```python
 import bamboo as bm
 
-# One-shot: Rust scan → PyArrow (fastest for large regions)
+# Export selected columns and tags to PyArrow
 table = bm.read_columns(
     "cohort.bam",
     columns=["qname", "rname", "pos", "mapq", "flag"],
@@ -119,11 +119,13 @@ Bamboo reads `s3://`, `gs://`, `https://`, and `file://` URIs with the same API.
 
 Before switching production pipelines:
 
-1. Run parity on your files:
+1. Run the repository parity fixtures (these do not read your own files):
    ```bash
    pytest tests/test_pysam_parity.py tests/test_pysam_realworld.py -q
    ```
-2. Spot-check a region:
+2. Build a separate comparison on your own representative files. For example,
+   obtain Bamboo columns for a region and compare every selected value against
+   a pysam loop with the same coordinates and filters:
    ```python
    import bamboo as bm, pysam
 
@@ -135,7 +137,7 @@ Before switching production pipelines:
    ```
 3. Confirm index sidecars are present for `fetch()` / columnar region scans.
 
-## Not yet supported (stick with pysam)
+## Unsupported interfaces
 
 - SAM text mode (`"r"`), CRAM via unified `AlignmentFile("rc")`
 - `check_index()`, CSI, tabix on BAM
@@ -144,9 +146,14 @@ Before switching production pipelines:
 - SAM/CRAM writing (BAM write is supported)
 - Full `Header` object API (`header.to_dict()`, `@PG` records, etc.)
 
-## Recommended migration path
+## Adopt one verified path at a time
 
-1. **Day 1:** `from bamboo.compat import pysam` — zero code changes, run existing tests
-2. **Day 2:** Replace hot loops with `read_columns()` / `to_arrow()` on indexed regions
-3. **Day 3:** Adopt `examples/cohort_region_qc.py` pattern for QC notebooks
-4. **Later:** Direct `import bamboo as bm`, drop compat shim where columnar covers your use case
+1. Run the original workflow and retain its outputs and package versions.
+2. Port one supported read path into a separate comparison script.
+3. Compare records, coordinates, tags, ordering, filtering, and failure behavior
+   used downstream. Include empty regions and reads at region boundaries.
+4. Measure runtime and memory with the same inputs only after the required
+   outputs agree. Keep the original route for unsupported interfaces.
+
+For related investigations and reproducible examples, see
+[Cheerful Duck Research](https://cheerfulduck.com/research).

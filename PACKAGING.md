@@ -1,28 +1,22 @@
 # Packaging and releases
 
-Bamboo ships as **PyPI wheels** (primary) and a **Bioconda recipe** (for conda/mamba environments).
+Release 0.1.0 is [published on PyPI](https://pypi.org/project/bamboo-hts/0.1.0/)
+as `bamboo-hts`; users import `bamboo`. The published files include CPython 3.12
+wheels for macOS x86_64/ARM64 and manylinux_2_34 x86_64/ARM64, plus an sdist.
+There is no Windows wheel in this release. A source distribution's presence
+does not establish that it builds on every platform listed in package metadata.
 
-## User install
+See [the README](README.md#install) for an isolated installation and extension
+load check. Matching wheels contain the compiled extension; a source build
+requires Rust, maturin, and native build dependencies. The release workflow
+uses the `htslib` feature. Check `bamboo.pileup_available()` before relying on it.
 
-```bash
-# PyPI (recommended) — distribution name is bamboo-hts; import is still bamboo
-pip install bamboo-hts
-
-# Optional extras
-pip install bamboo-hts[polars]
-pip install bamboo-hts[pandas]
-
-# Conda (after bioconda recipe is merged)
-conda install -c bioconda -c conda-forge bamboo-hts
-```
-
-> PyPI name `bamboo` is taken by an unrelated imaging package. We publish as **`bamboo-hts`**.
-
-No maturin or Rust toolchain required for end users — wheels bundle the compiled extension and bundled htslib (via `rust-htslib` / `hts-sys`).
+The repository contains [Bioconda metadata](conda/bioconda/meta.yaml). Verify a
+package in the channel index before documenting `conda install` as available.
 
 ## Maintainer release checklist
 
-### 1. Bump version
+### 1. Verify a candidate, then bump the version
 
 Sync version in:
 - `pyproject.toml` (`project.version`)
@@ -40,7 +34,7 @@ git push origin v0.1.0
 The [Release workflow](.github/workflows/release.yml) builds:
 - manylinux wheels (`x86_64`, `aarch64`)
 - macOS wheels (`x86_64`, `aarch64`)
-- Windows wheels
+- Windows wheel attempt (allowed to fail; not a release prerequisite)
 - source distribution (`bamboo-hts-0.1.0.tar.gz`)
 
 and uploads to PyPI when `PYPI_API_TOKEN` is set in GitHub repository secrets.
@@ -51,9 +45,11 @@ Create a PyPI API token at https://pypi.org/manage/account/token/ with scope for
 gh secret set PYPI_API_TOKEN --repo dnncha/bamboo
 ```
 
-Re-run a failed release from the Actions tab (**workflow_dispatch**) or re-push the tag after the secret is set.
+Re-run the failed workflow for the same reviewed tag after fixing configuration.
+Do not move a published tag or infer publication from successful build jobs;
+check the PyPI file list and install the artifact on its supported platform.
 
-### 3. Verify locally before tagging (optional)
+### 3. Verify locally before tagging
 
 ```bash
 ./scripts/verify_wheel.sh
@@ -95,7 +91,7 @@ conda install --use-local -c file://$PWD/conda/dist bamboo-hts
 | Problem | Fix |
 |---------|-----|
 | `import bamboo` fails after pip install | Ensure Python >= 3.10; wheel must match platform (no pure-Python fallback) |
-| `pileup_available()` is False | Reinstall from PyPI wheel built with htslib feature (not a noodles-only dev build) |
+| `pileup_available()` is False | Check the installed artifact and build feature; verify the compiled extension loaded |
 | Conda build can't find `maturin` | Add `maturin >=1.5,<2` to host requirements |
 | htslib compile errors on Linux | Ensure `zlib`, `bzip2`, `xz`, `libdeflate`, `libcurl` host deps (see recipe) |
 | Windows wheel build fails in CI | `hts-sys` runs `version.sh` at compile time — Windows wheels are optional until upstream fixes land |
