@@ -56,6 +56,9 @@ impl FetchRegion {
                 if let Some((start, end)) = interval.split_once('-') {
                     let start = parse_samtools_start(start)?;
                     let end = parse_samtools_end(end)?;
+                    if end <= start {
+                        return Err(RegionParseError::InvalidCoordinate(interval.to_string()));
+                    }
                     (Some(start), Some(end))
                 } else {
                     let start = parse_samtools_start(interval)?;
@@ -75,9 +78,9 @@ impl FetchRegion {
     pub fn to_samtools_region(&self) -> String {
         match (self.start, self.end) {
             (None, None) => self.reference_name.clone(),
-            (Some(start), None) => format!("{}:{}", self.reference_name, start + 1),
+            (Some(start), None) => format!("{}:{}", self.reference_name, u64::from(start) + 1),
             (Some(start), Some(end)) => {
-                format!("{}:{}-{}", self.reference_name, start + 1, end)
+                format!("{}:{}-{}", self.reference_name, u64::from(start) + 1, end)
             }
             (None, Some(end)) => format!("{}:1-{}", self.reference_name, end),
         }
@@ -85,13 +88,13 @@ impl FetchRegion {
 }
 
 fn parse_samtools_start(value: &str) -> Result<u32, RegionParseError> {
-    let one_based: u32 = value
+    let one_based: u64 = value
         .parse()
         .map_err(|_| RegionParseError::InvalidCoordinate(value.to_string()))?;
-    if one_based == 0 {
-        return Err(RegionParseError::InvalidCoordinate(value.to_string()));
-    }
-    Ok(one_based - 1)
+    one_based
+        .checked_sub(1)
+        .and_then(|start| u32::try_from(start).ok())
+        .ok_or_else(|| RegionParseError::InvalidCoordinate(value.to_string()))
 }
 
 fn parse_samtools_end(value: &str) -> Result<u32, RegionParseError> {
@@ -118,5 +121,66 @@ mod tests {
         assert_eq!(region.reference_name, "chr1");
         assert_eq!(region.start, Some(999));
         assert_eq!(region.end, Some(2000));
+    }
+
+    #[test]
+    fn rejects_zero_and_reversed_interval_ends() {
+        for input in ["chr1:1-0", "chr1:2-1", "chr1:10-3"] {
+            assert!(matches!(
+                FetchRegion::from_samtools_region(input),
+                Err(RegionParseError::InvalidCoordinate(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn single_base_interval_is_not_empty() {
+        let region = FetchRegion::from_samtools_region("chr1:42-42").unwrap();
+        assert_eq!(region.start, Some(41));
+        assert_eq!(region.end, Some(42));
+        assert_eq!(region.to_samtools_region(), "chr1:42-42");
+    }
+
+    #[test]
+    fn maximum_zero_based_start_does_not_overflow() {
+        let region = FetchRegion {
+            reference_name: "chr1".to_string(),
+            start: Some(u32::MAX),
+            end: None,
+        };
+        assert_eq!(region.to_samtools_region(), "chr1:4294967296");
+        assert_eq!(
+            FetchRegion::from_samtools_region(&region.to_samtools_region()).unwrap(),
+            region
+        );
+        // Public numeric fields also permit callers to build invalid intervals:
+        // formatting must still be deterministic rather than panic or wrap.
+        let bounded = FetchRegion {
+            end: Some(u32::MAX),
+            ..region
+        };
+        assert_eq!(bounded.to_samtools_region(), "chr1:4294967296-4294967295");
+    }
+
+    #[test]
+    fn maximum_end_and_last_base_round_trip() {
+        let region = FetchRegion::from_samtools_region("chr1:4294967295-4294967295").unwrap();
+        assert_eq!(region.start, Some(u32::MAX - 1));
+        assert_eq!(region.end, Some(u32::MAX));
+        assert_eq!(region.to_samtools_region(), "chr1:4294967295-4294967295");
+    }
+
+    #[test]
+    fn rejects_coordinates_outside_storage_range() {
+        for input in [
+            "chr1:0",
+            "chr1:4294967297",
+            "chr1:18446744073709551616",
+            "chr1:1-4294967296",
+            "chr1:-1",
+            "chr1:1-",
+        ] {
+            assert!(FetchRegion::from_samtools_region(input).is_err(), "{input}");
+        }
     }
 }
